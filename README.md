@@ -85,7 +85,8 @@ Click the Redline button of the browser's toolbar to open the sidebar. It lists 
 screenshots of the round, and the marks of each with their comment:
 
 - A mark selected in the sidebar is selected on the screenshot, and the other way round.
-- **Annotate** (or a click on the preview) shows an earlier screenshot again, to mark more.
+- A click on a screenshot's preview shows it on the page, to mark more; another click goes back to
+  the live page.
 - Write a comment on the round as a whole, then **Send to Claude**, or **Done** to end the loop.
 
 A round waits in the browser until Claude listens. The bar at the bottom of the sidebar tells

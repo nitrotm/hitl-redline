@@ -106,6 +106,13 @@ test('screenshot, draw, comment and send a round', async () => {
   await expect(sidebar.locator('.marks li.selected')).toHaveCount(1)
   await expect(page.locator('redline-overlay g.mark.selected[data-id="1"]')).toHaveCount(1)
 
+  // the preview is a toggle: back to the live page, then the screenshot again
+  const frozen = page.locator('redline-overlay .frozen')
+  await sidebar.locator('.thumb').first().click()
+  await expect(frozen).toBeHidden()
+  await sidebar.locator('.thumb').first().click()
+  await expect(frozen).toBeVisible()
+
   await sidebar.locator('footer textarea').fill('Round 1, overall')
   await sidebar.locator('footer textarea').blur()
   await sidebar.getByRole('button', { name: /^Send to Claude/ }).click()

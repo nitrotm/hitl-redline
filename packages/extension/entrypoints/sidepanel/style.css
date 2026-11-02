@@ -286,6 +286,18 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* the screenshot shown on the page, being annotated */
+.thumb.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.annotating {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: normal;
+}
+
 .badge-label {
   fill: #fff;
   font:

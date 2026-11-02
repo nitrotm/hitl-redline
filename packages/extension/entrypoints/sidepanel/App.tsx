@@ -190,20 +190,9 @@ function SnapshotView({ tabId, session, snapshot, ask, disabled }: { tabId: numb
       <div class="section-head">
         <h2>
           {snapshot.id} <span class="meta">{[snapshot.device, time].filter(Boolean).join(' · ')}</span>
+          {current && <span class="annotating"> annotating</span>}
         </h2>
         <div class="tools">
-          {current ? (
-            <button onClick={() => ask({ type: 'snapshot/close', tabId })} title="Leave the screenshot, back to the live page">
-              Back to page
-            </button>
-          ) : (
-            <button
-              disabled={disabled}
-              onClick={() => ask({ type: 'snapshot/open', tabId, snapshotId: snapshot.id })}
-              title="Show it on the page, to draw more">
-              Annotate
-            </button>
-          )}
           <button
             class="icon"
             disabled={disabled}
@@ -216,7 +205,9 @@ function SnapshotView({ tabId, session, snapshot, ask, disabled }: { tabId: numb
       <Preview
         session={session}
         snapshot={snapshot}
-        onClick={disabled || current ? undefined : () => ask({ type: 'snapshot/open', tabId, snapshotId: snapshot.id })}
+        current={current}
+        // a toggle: shown on the page to annotate it, or back to the live page
+        onClick={disabled ? undefined : () => ask(current ? { type: 'snapshot/close', tabId } : { type: 'snapshot/open', tabId, snapshotId: snapshot.id })}
       />
       {snapshot.annotations.length === 0 ? (
         <p class="empty">{current ? 'Draw on the screenshot, on the page.' : 'No marks.'}</p>
@@ -241,11 +232,14 @@ function SnapshotView({ tabId, session, snapshot, ask, disabled }: { tabId: numb
 }
 
 // the screenshot, with its marks drawn over it as the overlay draws them
-function Preview({ session, snapshot, onClick }: { session: Session; snapshot: Snapshot; onClick?: () => void }) {
+function Preview({ session, snapshot, current, onClick }: { session: Session; snapshot: Snapshot; current: boolean; onClick?: () => void }) {
   const image = useImage(session.id, snapshot.id)
   const { width, height, scrollX, scrollY } = snapshot.viewport
   return (
-    <div class={`thumb ${onClick ? 'clickable' : ''}`} onClick={onClick} title={onClick ? 'Annotate this screenshot' : undefined}>
+    <div
+      class={`thumb ${onClick ? 'clickable' : ''} ${current ? 'on' : ''}`}
+      onClick={onClick}
+      title={onClick ? (current ? 'Back to the live page' : 'Annotate this screenshot, on the page') : undefined}>
       <svg viewBox={`0 0 ${width} ${height}`}>
         {image && <image href={image} width={width} height={height} />}
         <g transform={`translate(${-scrollX} ${-scrollY})`}>

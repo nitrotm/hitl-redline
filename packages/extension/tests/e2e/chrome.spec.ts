@@ -150,6 +150,12 @@ test('screenshot, draw, comment and send a round', async () => {
   await expectRound(bridge, expect)
   await expect(sidebar.locator('.note.sent')).toContainText('Round 1 sent')
 
+  // the bridge gone, Claude does not listen: no screenshot to take, nor its shortcut
+  await expect(sidebar.locator('.not-listening')).toBeVisible()
+  await expect(sidebar.getByRole('button', { name: 'Take a screenshot' })).toHaveCount(0)
+  await expect(sidebar.locator('.shortcuts')).not.toContainText('Ctrl+S')
+  await expect(sidebar.locator('.shortcuts')).not.toContainText('Ctrl+D')
+
   // Claude replies, with what it did and a question: the sidebar shows them, and the answer goes
   // with the next round
   const first = bridge.dir
@@ -167,6 +173,7 @@ test('screenshot, draw, comment and send a round', async () => {
   )
   bridge = await startBridge(fixtures.url, ['--reply', replyFile])
   await expect(sidebar.locator('.reply')).toContainText('padding 8 → 16px')
+  await expect(sidebar.getByRole('button', { name: 'Take a screenshot' })).toBeVisible()
   await expect(sidebar.locator('.question')).toContainText('How much less space?')
   await sidebar.locator('.question textarea').fill('Half of it')
   await sidebar.locator('.question textarea').blur()

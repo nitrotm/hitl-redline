@@ -9,10 +9,10 @@ export const COLORS = ['#e11d48', '#f59e0b', '#2563eb', '#16a34a'] as const
 // the keys of the colors, in order, by their places (KeyboardEvent.code): the row under the tools'
 // 1, 2, 3, 4, Q W E R on a QWERTY keyboard
 export const COLOR_KEYS = ['KeyQ', 'KeyW', 'KeyE', 'KeyR'] as const
-export const RECT_STROKE = 3
-export const FREEHAND_SIZE = 6
-export const ARROW_SHAFT = 4
-const ARROW_HEAD = { length: 16, width: 16 }
+export const RECT_STROKE = 2.25
+export const FREEHAND_SIZE = 4.5
+export const ARROW_SHAFT = 3
+const ARROW_HEAD = { length: 12, width: 12 }
 export const BADGE_HEIGHT = 20
 const BADGE_FONT_SIZE = 12
 

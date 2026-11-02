@@ -106,9 +106,13 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
       return change(tabId, (s) => deleteAnnotation(s, request.id))
     case 'annotation/undo':
       return change(tabId, undo)
-    case 'snapshot/capture':
+    case 'snapshot/capture': {
+      // a screenshot is for Claude: none while it does not listen for the page
+      const tab = await browser.tabs.get(tabId)
+      if (!(await bridgeFor(tab.url, (await getSession(tabId))?.id))) throw new Error('Claude is not listening for this page: start /redline in Claude Code')
       if (!(await getSession(tabId))?.active) await start(tabId)
       return capture(tabId)
+    }
     case 'snapshot/open':
       return change(tabId, (s) => openSnapshot(s, request.snapshotId))
     case 'snapshot/close':

@@ -4,7 +4,7 @@ import { useEffect, useErrorBoundary, useRef, useState } from 'preact/hooks'
 import type { Annotation, Reply, Snapshot, Status } from '@redline/shared'
 
 import { DEVICES, WINDOW } from '@/src/devices.ts'
-import { badgeFor, fillPath } from '@/src/geometry.ts'
+import { RECT_STROKE, badgeFor, fillPath } from '@/src/geometry.ts'
 import { type Request, send } from '@/src/messages.ts'
 import { type Session, hasFeedback, submitStatus } from '@/src/state/session.ts'
 
@@ -46,10 +46,10 @@ export function App() {
           <p class="empty">No tab.</p>
         ) : live ? (
           <Guard tab={tab} ask={ask}>
-            <SessionView tab={tab} session={live} ask={ask} />
+            <SessionView tab={tab} session={live} ask={ask} listening={Boolean(bridge)} />
           </Guard>
         ) : (
-          <Start tab={tab} session={session} ask={ask} />
+          <Start tab={tab} session={session} ask={ask} listening={Boolean(bridge)} />
         )}
       </main>
       <StatusBar status={bridge} />
@@ -90,6 +90,9 @@ function StatusBar({ status }: { status: Status | undefined }) {
 }
 
 // the keys, one per row: a key's names are joined by +, keys side by side are alternatives
+// the shortcuts that need Claude listening: a screenshot is for it, a round goes to it
+const FOR_CLAUDE = new Set(['Ctrl+S', 'Ctrl+D'])
+
 const SHORTCUTS: [string[][], string][] = [
   [[['Ctrl', 'S']], 'Take a screenshot of the live page, to draw on; on a screenshot, back to the live page'],
   [[['1']], 'Select and move a mark'],
@@ -105,13 +108,14 @@ const SHORTCUTS: [string[][], string][] = [
   [[['Alt', 'Shift', 'R']], 'Turn Redline on or off'],
 ]
 
-function Help() {
+function Help({ listening }: { listening: boolean }) {
+  const shortcuts = listening ? SHORTCUTS : SHORTCUTS.filter(([keys]) => !keys.some((combo) => FOR_CLAUDE.has(combo.join('+'))))
   return (
     <div class="help">
-      <p>Take a screenshot, draw on it, and comment each mark as you draw it.</p>
+      {listening && <p>Take a screenshot, draw on it, and comment each mark as you draw it.</p>}
       <table class="shortcuts">
         <tbody>
-          {SHORTCUTS.map(([keys, what]) => (
+          {shortcuts.map(([keys, what]) => (
             <tr key={what}>
               <td>
                 {keys.map((combo, i) => (
@@ -153,25 +157,38 @@ function DevicePicker({ tabId, session, ask, disabled }: { tabId: number; sessio
   )
 }
 
-function Start({ tab, session, ask }: { tab: ActiveTab; session: Session | undefined; ask: Ask }) {
+// Claude not listening for this page: nothing to take a screenshot for
+function NotListening() {
+  return (
+    <p class="note not-listening">
+      Claude is not listening for this page. Start <code>/redline</code> in Claude Code to review it.
+    </p>
+  )
+}
+
+function Start({ tab, session, ask, listening }: { tab: ActiveTab; session: Session | undefined; ask: Ask; listening: boolean }) {
   return (
     <div class="start">
       <p class="page" title={tab.url}>
         {tab.title || tab.url}
       </p>
-      <div class="capture-row">
-        <DevicePicker tabId={tab.id} session={session} ask={ask} />
-        <button class="primary" onClick={() => ask({ type: 'snapshot/capture', tabId: tab.id })}>
-          Take a screenshot
-        </button>
-      </div>
+      {listening ? (
+        <div class="capture-row">
+          <DevicePicker tabId={tab.id} session={session} ask={ask} />
+          <button class="primary" onClick={() => ask({ type: 'snapshot/capture', tabId: tab.id })}>
+            Take a screenshot
+          </button>
+        </div>
+      ) : (
+        <NotListening />
+      )}
       {session?.lastSent?.status === 'done' && <p class="note">Finished: the last round went to {shortPath(session.lastSent.directory)}.</p>}
-      <Help />
+      {listening && <Help listening />}
     </div>
   )
 }
 
-function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; ask: Ask }) {
+function SessionView({ tab, session, ask, listening }: { tab: ActiveTab; session: Session; ask: Ask; listening: boolean }) {
   const tabId = tab.id
   const locked = Boolean(session.pending)
   const marks = session.snapshots.reduce((n, s) => n + s.annotations.length, 0)
@@ -198,6 +215,10 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
         <p class="capture note">
           Annotating {session.current}. Click its preview again (or Ctrl+S, or ✕ on the page) to go back to the page, and take another.
         </p>
+      ) : !listening ? (
+        <div class="capture">
+          <NotListening />
+        </div>
       ) : (
         <div class="capture capture-row">
           <DevicePicker tabId={tabId} session={session} ask={ask} disabled={locked} />
@@ -212,7 +233,7 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
       )}
 
       {session.reply && <ReplyView tabId={tabId} session={session} reply={session.reply} ask={ask} disabled={locked} />}
-      {session.snapshots.length === 0 && !session.reply && <Help />}
+      {session.snapshots.length === 0 && !session.reply && <Help listening={listening} />}
       {session.snapshots.map((snapshot) => (
         <SnapshotView key={snapshot.id} tabId={tabId} session={session} snapshot={snapshot} ask={ask} disabled={locked} />
       ))}
@@ -369,7 +390,7 @@ function Preview({ session, snapshot, current, onClick }: { session: Session; sn
             return (
               <g key={a.id}>
                 {a.kind === 'rect' ? (
-                  <rect x={a.rect.x} y={a.rect.y} width={a.rect.width} height={a.rect.height} fill="none" stroke={a.color} stroke-width={3} />
+                  <rect x={a.rect.x} y={a.rect.y} width={a.rect.width} height={a.rect.height} fill="none" stroke={a.color} stroke-width={RECT_STROKE} />
                 ) : (
                   <path d={fillPath(a)} fill={a.color} />
                 )}

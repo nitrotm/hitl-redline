@@ -97,6 +97,8 @@ export async function expectRound(bridge: Bridge, expect: typeof import('@playwr
   expect([annotated.width, annotated.height]).toEqual([clean.width, clean.height])
   const scale = clean.width / snapshot.viewport.width
   const edge = { x: (rect.x + rect.width / 2 - snapshot.viewport.scrollX) * scale, y: (rect.y - snapshot.viewport.scrollY) * scale }
-  expect(isRed(pixel(annotated, edge.x, edge.y))).toBe(true)
-  expect(isRed(pixel(clean, edge.x, edge.y))).toBe(false)
+  // the line is thin, and drawn over a white halo: red within two pixels of the edge
+  const redNear = (png: PNG) => [-2, -1, 0, 1, 2].some((dy) => isRed(pixel(png, edge.x, edge.y + dy)))
+  expect(redNear(annotated)).toBe(true)
+  expect(redNear(clean)).toBe(false)
 }

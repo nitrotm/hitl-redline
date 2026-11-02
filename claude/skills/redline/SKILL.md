@@ -1,12 +1,15 @@
 ---
 name: redline
 description: >-
-  A visual review loop of the page being developed, with the Redline browser extension: open the
-  dev server's preview in Firefox (firefox-devtools MCP), wait for the user's screenshots annotated
-  with numbered marks (#1, #2…) and comments, apply them in the code, reload, reply in the user's
-  sidebar, and wait again. Use it when the user wants to review, mark up, annotate or give visual
-  feedback on the UI in the browser, or runs /redline. It is a continuous session: round after
-  round, until the user sends a round with nothing to change (Done, or Ctrl+D with nothing to send).
+  The way to review a user interface with the user: open the dev server's page in Firefox
+  (firefox-devtools MCP) with the Redline extension, wait for the user's screenshots annotated with
+  numbered marks (#1, #2…) and comments, apply each change so the user sees it at once, reply in
+  their sidebar, and wait again. Use it whenever the user wants to review, look at, check or give
+  feedback on a page or the UI ("review the user interface", "show me the page and I'll tell you
+  what to change", "mark up", "annotate"), rather than reviewing it yourself from screenshots, and
+  when they run /redline. It is a continuous session: round after round, until the user sends a
+  round with nothing to change (Done, or Ctrl+D with nothing to send).
+argument-hint: '[preview URL]'
 allowed-tools: Bash(redline:*)
 ---
 
@@ -56,7 +59,9 @@ and use the URL it prints. Ask the user only if you cannot tell.
 
 ## 2. Wait for feedback, then open the page
 
-Run `redline wait --url <preview URL>` **with `run_in_background: true`**. It listens on the
+Run `redline wait --url <preview URL>` **with `run_in_background: true`**, and **outside the
+sandbox** if your Bash commands run in one (`dangerouslyDisableSandbox: true`): the sandbox has a
+loopback of its own, which Firefox does not reach. The same goes for `redline status`. It listens on the
 loopback for one round, writes it to `.redline/rounds/NNN/`, prints the path of its `feedback.md`,
 and exits. That exit wakes you up. Start it **before** opening the page: Redline starts by itself
 on a tab of the preview only while a `redline wait` names it.

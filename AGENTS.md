@@ -4,22 +4,22 @@ Guidance for coding agents working in this repository. Claude Code reads it thro
 in `CLAUDE.md`.
 
 Redline is a browser extension to draw on a page and comment each mark, a bridge that hands the
-result to Claude Code, and a `/redline` command that runs the review loop. See
+result to Claude Code, and a `redline` skill (`/redline`) that runs the review loop. See
 [README.md](README.md) for what it does.
 
 ## Layout
 
-| Path                             | What                                                                                                               |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `packages/shared`                | The contract: zod schemas of a round (`schema.ts`), the HTTP protocol (`protocol.ts`), bounding boxes              |
-| `packages/bridge`                | `redline`: `wait` (a one-shot loopback server, `server.ts`), the round on disk (`writer.ts`), the CLI (`cli.ts`)   |
-| `packages/extension`             | WXT: `entrypoints/` (background, overlay content script, sidepanel), `src/` (the rest)                             |
-| `packages/extension/src/state`   | Sessions: pure functions (`session.ts`), storage (`store.ts`), screenshots in IndexedDB (`images.ts`)              |
-| `packages/extension/src/overlay` | The drawing layer: SVG in a shadow root                                                                            |
-| `packages/extension/src/capture` | The annotated screenshot (OffscreenCanvas)                                                                         |
-| `claude/`                        | The Claude Code plugin: `skills/redline/SKILL.md` is the review loop, `commands/redline.md` (`/redline`) starts it |
-| `e2e-fixtures/`                  | A test page and its server                                                                                         |
-| `nix/`                           | `workspace.nix` (yarn build + checks), `bridge.nix` (the `redline` wrapper)                                        |
+| Path                             | What                                                                                                                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared`                | The contract: zod schemas of a round (`schema.ts`), the HTTP protocol (`protocol.ts`), bounding boxes                                                                                                 |
+| `packages/bridge`                | `redline`: `wait` (a one-shot loopback server, `server.ts`), the round on disk (`writer.ts`), the CLI (`cli.ts`)                                                                                      |
+| `packages/extension`             | WXT: `entrypoints/` (background, overlay content script, sidepanel), `src/` (the rest)                                                                                                                |
+| `packages/extension/src/state`   | Sessions: pure functions (`session.ts`), storage (`store.ts`), screenshots in IndexedDB (`images.ts`)                                                                                                 |
+| `packages/extension/src/overlay` | The drawing layer: SVG in a shadow root                                                                                                                                                               |
+| `packages/extension/src/capture` | The annotated screenshot (OffscreenCanvas)                                                                                                                                                            |
+| `claude/`                        | The Claude Code plugin: `skills/redline/SKILL.md` is the review loop, and `/redline`. No command of the same name: in a plugin, both would be `redline:redline`, and the command would hide the skill |
+| `e2e-fixtures/`                  | A test page and its server                                                                                                                                                                            |
+| `nix/`                           | `workspace.nix` (yarn build + checks), `bridge.nix` (the `redline` wrapper)                                                                                                                           |
 
 ## Commands
 

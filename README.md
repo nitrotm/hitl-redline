@@ -24,8 +24,7 @@ It has three parts:
 - **The bridge** (`packages/bridge`), `redline`: `redline wait` listens on the loopback, on the first
   free port of 47390-47399 (one per project waiting), for one round, writes it to `.redline/rounds/NNN/` in the project, prints the path of its
   `feedback.md`, and exits. Claude runs it in the background, so it is woken up when you send.
-- **The `redline` skill and `/redline` command** (`claude/`), a Claude Code plugin that runs the
-  loop: a continuous session, round after round, until you send one with nothing to change. Claude
+- **The `redline` skill** (`claude/`), a Claude Code plugin that runs the loop, as `/redline`: a continuous session, round after round, until you send one with nothing to change. Claude
   starts it on `/redline`, or by itself when you ask to review the page in the browser.
 
 ## Install
@@ -39,12 +38,16 @@ nix build .#redline-extension  # firefox/, chrome/, redline.xpi
 
 Or add `packages.<system>.redline` of this flake to your home-manager packages.
 
-The `/redline` command is a Claude Code plugin; this repository is its marketplace:
+The `redline` skill is a Claude Code plugin; this repository is its marketplace:
 
 ```
 /plugin marketplace add /path/to/firefox-redline
 /plugin install redline@redline
 ```
+
+With Claude Code's sandbox on, `redline wait` must run outside it: the sandbox has its own
+loopback, which Firefox does not reach. The skill says so; to spare the permission prompt each
+round, add `redline` to the sandbox's `excludedCommands` in your Claude Code settings.
 
 Firefox comes from the **firefox-devtools** MCP server: `/redline` installs the extension in
 its profile as a temporary add-on, each time.

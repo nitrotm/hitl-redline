@@ -10,6 +10,7 @@ import type { AnnotationPatch, NewAnnotation } from '../messages.ts'
 // background (entrypoints/background.ts) stores what they return.
 
 export type Tool = 'select' | 'rect' | 'arrow' | 'freehand'
+export type DrawingTool = Exclude<Tool, 'select'>
 
 export interface Session {
   id: string
@@ -29,6 +30,8 @@ export interface Session {
   selected?: number
   comment: string
   tool: Tool
+  // the last drawing tool chosen: a new screenshot starts with it
+  drawingTool: DrawingTool
   color: string
   // the device the page is shown as (src/devices.ts), or the window itself
   device: string
@@ -47,10 +50,15 @@ export function createSession(tabId: number, id: string): Session {
     nextSnapshotNumber: 1,
     snapshots: [],
     comment: '',
-    tool: 'rect',
+    tool: 'freehand',
+    drawingTool: 'freehand',
     color: COLORS[0],
     device: WINDOW,
   }
+}
+
+export function setTool(session: Session, tool: Tool): Session {
+  return { ...session, tool, drawingTool: tool === 'select' ? session.drawingTool : tool }
 }
 
 export function currentSnapshot(session: Session): Snapshot | undefined {
@@ -105,7 +113,17 @@ export interface Capture {
 export function takeSnapshot(session: Session, capture: Capture): [Session, Snapshot] {
   const snapshot: Snapshot = { id: `S${session.nextSnapshotNumber}`, ...capture, annotations: [] }
   const { selected: _, ...rest } = session
-  return [{ ...rest, nextSnapshotNumber: session.nextSnapshotNumber + 1, snapshots: [...session.snapshots, snapshot], current: snapshot.id }, snapshot]
+  return [
+    {
+      ...rest,
+      nextSnapshotNumber: session.nextSnapshotNumber + 1,
+      snapshots: [...session.snapshots, snapshot],
+      current: snapshot.id,
+      // ready to draw, with the tool drawn with last
+      tool: session.drawingTool ?? 'freehand',
+    },
+    snapshot,
+  ]
 }
 
 export function openSnapshot(session: Session, snapshotId: string): Session {

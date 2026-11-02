@@ -17,6 +17,7 @@ import {
   roundFailed,
   roundSent,
   selectAnnotation,
+  setTool,
   takeSnapshot,
   undo,
   updateAnnotation,
@@ -85,7 +86,7 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
   switch (request.type) {
     case 'ui/set':
       if (!(await getSession(tabId))?.active) await start(tabId)
-      return change(tabId, (s) => ({ ...s, tool: request.tool ?? s.tool, color: request.color ?? s.color, device: request.device ?? s.device }))
+      return change(tabId, (s) => ({ ...(request.tool ? setTool(s, request.tool) : s), color: request.color ?? s.color, device: request.device ?? s.device }))
     case 'annotation/add':
       return update(tabId, (s) => addAnnotation(required(s), request.annotation))
     case 'annotation/update':

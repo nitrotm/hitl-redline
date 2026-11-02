@@ -45,7 +45,8 @@ test('screenshot, draw, comment and send a round', async () => {
   await page.keyboard.press('Control+s')
   await expect(page.locator('redline-overlay .frozen')).toBeVisible()
 
-  // a rectangle around the button, commented at once
+  // a rectangle around the button, commented at once (the first screenshot starts with the pen)
+  await page.keyboard.press('2')
   await page.mouse.move(button.x - 8, button.y - 8)
   await page.mouse.down()
   await page.mouse.move(button.x + button.width + 8, button.y + button.height + 8, { steps: 5 })
@@ -106,6 +107,7 @@ test('show the page as a phone, and capture it so', async () => {
   const canvas = page.locator('redline-overlay .frozen svg')
   await expect(canvas).toBeVisible()
   const box = (await canvas.boundingBox())!
+  await page.keyboard.press('2')
   await page.mouse.move(box.x + box.width / 2 - 40, box.y + 120)
   await page.mouse.down()
   await page.mouse.move(box.x + box.width / 2 + 40, box.y + 180, { steps: 4 })

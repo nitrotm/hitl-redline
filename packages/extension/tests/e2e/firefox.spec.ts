@@ -50,7 +50,8 @@ test('screenshot, draw, comment and send a round', async () => {
   await driver.actions().keyDown(Key.CONTROL).sendKeys('s').keyUp(Key.CONTROL).perform()
   await driver.wait(async () => (await shadow.findElement(By.css('.frozen'))).isDisplayed(), 10_000)
 
-  // a rectangle around the button, commented at once
+  // a rectangle around the button, commented at once (the first screenshot starts with the pen)
+  await driver.actions().sendKeys('2').perform()
   const at = (x: number, y: number) => ({ x: Math.round(x), y: Math.round(y), origin: 'viewport' as const })
   await driver
     .actions()

@@ -12,6 +12,7 @@ import {
   queueRound,
   roundSent,
   selectAnnotation,
+  setTool,
   takeSnapshot,
   undo,
   updateAnnotation,
@@ -128,5 +129,16 @@ describe('selectAnnotation', () => {
     expect(deleteAnnotation(session, 1).selected).toBe(2)
     expect(takeSnapshot(session, capture())[0].selected).toBeUndefined()
     expect(closeSnapshot(session).selected).toBeUndefined()
+  })
+})
+
+describe('tools', () => {
+  it('start a screenshot with the pen, then with the drawing tool used last', () => {
+    let [session] = takeSnapshot(createSession(1, 's'), capture())
+    expect(session.tool).toBe('freehand')
+    session = setTool(setTool(session, 'arrow'), 'select')
+    expect(session).toMatchObject({ tool: 'select', drawingTool: 'arrow' })
+    ;[session] = takeSnapshot(session, capture())
+    expect(session.tool).toBe('arrow')
   })
 })

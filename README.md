@@ -24,7 +24,9 @@ It has three parts:
 - **The bridge** (`packages/bridge`), `redline`: `redline wait` listens on the loopback, on the first
   free port of 47390-47399 (one per project waiting), for one round, writes it to `.redline/rounds/NNN/` in the project, prints the path of its
   `feedback.md`, and exits. Claude runs it in the background, so it is woken up when you send.
-- **The `/redline` command** (`claude/`), a Claude Code plugin that runs the loop.
+- **The `redline` skill and `/redline` command** (`claude/`), a Claude Code plugin that runs the
+  loop: a continuous session, round after round, until you send one with nothing to change. Claude
+  starts it on `/redline`, or by itself when you ask to review the page in the browser.
 
 ## Install
 

@@ -12,6 +12,13 @@ const PENCIL = `url("data:image/svg+xml,${encodeURIComponent(
 // the overlay's styles, in its shadow root: nothing of the page's reaches it
 export const OVERLAY_CSS = `
 :host { all: initial; }
+.device { position: fixed; inset: 0; background: #27272a; pointer-events: auto; }
+.device[hidden] { display: none; }
+.device .screen { position: absolute; transform-origin: 0 0; box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5); background: #fff; }
+.device iframe { display: block; border: 0; background: #fff; }
+.device-label { position: absolute; left: 0; right: 0; text-align: center; color: #a1a1aa; font: 12px system-ui, sans-serif; }
+/* while the frame of a device is captured, it alone shows */
+:host(.capturing) .frozen, :host(.capturing) .toolbar, :host(.capturing) .popover, :host(.capturing) .toast, :host(.capturing) .device-label { visibility: hidden; }
 .frozen { position: fixed; inset: 0; background: #18181b; pointer-events: auto; }
 .frozen[hidden] { display: none; }
 .canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; }
@@ -49,6 +56,10 @@ export const OVERLAY_CSS = `
 .toolbar .capture { padding: 0 8px; }
 .toolbar:not(.live) .capture .label { display: none; }
 .toolbar.live .capture { background: #e11d48; font-weight: 600; }
+.toolbar .device-select {
+  font: inherit; color: inherit; background: #2a2b2f; border: 1px solid #3a3b40; border-radius: 7px; height: 30px; padding: 0 6px; margin-right: 2px; cursor: pointer;
+}
+.toolbar:not(.live) .device-select { display: none; }
 .toolbar .grip { display: grid; place-items: center; width: 14px; height: 30px; cursor: grab; color: #71717a; }
 .toolbar .grip svg { width: 14px; }
 .toolbar .swatch::after { content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }

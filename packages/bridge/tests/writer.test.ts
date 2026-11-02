@@ -18,6 +18,12 @@ describe('renderFeedback', () => {
     expect(md).toContain('- **#2** freehand mark at (10, 20), 50×60 (no comment)')
   })
 
+  it('tells the device of a snapshot', () => {
+    const round = makeRound()
+    round.snapshots[0]!.device = 'Phone (iPhone 15)'
+    expect(renderFeedback(round)).toContain('- Viewport: 1280×800 CSS px, as a Phone (iPhone 15), dpr 2')
+  })
+
   it('tells where an arrow points', () => {
     const round = makeRound()
     round.snapshots[0]!.annotations = [{ id: 3, kind: 'arrow', color: '#e11d48', comment: 'This one', from: { x: 300, y: 700 }, to: { x: 120, y: 520 } }]

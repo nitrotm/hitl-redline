@@ -1,9 +1,11 @@
 import type { Annotation, Point, Snapshot } from '@redline/shared'
 
+import { deviceOf, deviceOptions } from '../devices.ts'
 import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, freehandPath, rectFromCorners, translate } from '../geometry.ts'
 import { type ContentRequest, type NewAnnotation, type PreparedCapture, send } from '../messages.ts'
 import { type Session, type Tool, currentSnapshot } from '../state/session.ts'
 import { targetAt } from '../target-hint.ts'
+import { mountDeviceFrame } from './device-frame.ts'
 import { OVERLAY_CSS } from './style.ts'
 
 // The overlay, in a shadow root that the page's styles cannot reach. On the live page, it is a
@@ -18,6 +20,8 @@ const MIN_SIZE = 4
 const MIN_ARROW = 12
 const TOOL_KEYS: Record<string, Tool> = { '1': 'select', '2': 'rect', '3': 'arrow', '4': 'freehand' }
 const SAVE_MS = 300
+// the id of a mark drawn, until the background gives it its own
+const NEW = 0
 
 export interface Overlay {
   render(session: Session): void
@@ -39,14 +43,16 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   // open, for the end-to-end tests to reach the toolbar; the page's styles stop at its edge all the same
   const root = host.attachShadow({ mode: 'open' })
   root.innerHTML = `<style>${OVERLAY_CSS}</style>
+    <div class="device" hidden></div>
     <div class="frozen" hidden>
-      <svg class="canvas" xmlns="${SVG}" preserveAspectRatio="xMinYMin meet">
+      <svg class="canvas" xmlns="${SVG}" preserveAspectRatio="xMidYMid meet">
         <image class="screenshot" preserveAspectRatio="none"></image>
         <g class="world"><g class="shapes"></g><g class="preview"></g></g>
       </svg>
     </div>
     <div class="toolbar live">
       <span class="grip" title="Move the toolbar">${ICONS.grip}</span>
+      <select class="device-select" title="Show the page as a device">${deviceOptions(initial.device)}</select>
       <button data-action="capture" class="capture" title="Take a screenshot to annotate (C)">${ICONS.camera}<span class="label">Screenshot</span></button>
       <span class="annotating">
         <span class="sep"></span>
@@ -82,6 +88,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   const comment = popover.querySelector('textarea')!
   const toast = root.querySelector<HTMLDivElement>('.toast')!
   const win = doc.defaultView!
+  const deviceFrame = mountDeviceFrame(root.querySelector<HTMLDivElement>('.device')!, win)
+  const deviceSelect = root.querySelector<HTMLSelectElement>('.device-select')!
+  deviceSelect.addEventListener('change', () => void send({ type: 'ui/set', device: deviceSelect.value }).catch(report))
 
   let session = initial
   let snapshot: Snapshot | undefined
@@ -96,8 +105,10 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     | { kind: 'freehand'; points: Point[] }
     | { kind: 'move'; id: number; from: Point; dx: number; dy: number }
     | null = null
-  // the mark whose comment the popover edits
+  // the mark whose comment the popover edits: NEW, a mark drawn whose id has not come yet
   let editing: number | null = null
+  // what was typed for a NEW mark, closed before its id came
+  let unsaved: string | undefined
 
   // a pointer's position, in the page's coordinates of the snapshot: the screenshot's, scaled to
   // the window, plus the scroll it was taken at
@@ -117,9 +128,11 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     snapshot = currentSnapshot(session)
     const marks = snapshot?.annotations ?? []
     if (!gesture) selected = session.selected ?? null
-    if (editing !== null && !marks.some((a) => a.id === editing)) closePopover(false)
+    if (editing !== null && editing !== NEW && !marks.some((a) => a.id === editing)) closePopover(false)
 
     toolbar.classList.toggle('live', !snapshot)
+    deviceFrame.show(deviceOf(session.device))
+    deviceSelect.value = session.device
     frozen.hidden = !snapshot
     if (snapshot) {
       const { width, height, scrollX, scrollY } = snapshot.viewport
@@ -233,11 +246,22 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       if (done.points.length < 2) return
       annotation = { kind: 'freehand', color: session.color, points: done.points }
     }
-    const target = targetOf({ ...annotation, id: 0, comment: '' } as Annotation)
-    // drawn at once, without its id until the background gives it one
-    shapes.append(shapeElement({ ...annotation, id: 0, comment: '' } as Annotation, { selected: false, highlighted: false }))
-    // then its comment, at once
-    send({ type: 'annotation/add', annotation: target ? { ...annotation, target } : annotation }).then(openPopover, report)
+    const drawn = { ...annotation, id: NEW, comment: '' } as Annotation
+    const target = targetOf(drawn)
+    // drawn at once, and its comment open at once, to type into: its id comes from the background
+    shapes.append(shapeElement(drawn, { selected: false, highlighted: false }))
+    openPopover(drawn)
+    send({ type: 'annotation/add', annotation: target ? { ...annotation, target } : annotation }).then((added) => {
+      if (editing === NEW) {
+        editing = added.id
+        popover.querySelector<HTMLSpanElement>('.badge')!.textContent = `#${added.id}`
+        if (comment.value) saveComment()
+      } else if (unsaved !== undefined) {
+        // its comment was typed and closed before the id came
+        void send({ type: 'annotation/update', id: added.id, patch: { comment: unsaved } }).catch(report)
+      }
+      unsaved = undefined
+    }, report)
   })
 
   svg.addEventListener('pointercancel', () => {
@@ -259,7 +283,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   // the screenshot: the same, as long as the page has not changed since.
   function targetOf(annotation: Annotation) {
     const c = aim(annotation)
-    return targetAt(doc, c.x - win.scrollX, c.y - win.scrollY, host)
+    // shown as a device, the page is the frame's
+    const live = deviceOf(session.device) ? deviceFrame.page() : { win, doc }
+    return live && targetAt(live.doc, c.x - live.win.scrollX, c.y - live.win.scrollY, host)
   }
 
   // the comment of a mark, where it is, at once: Enter saves, Esc closes, Shift+Enter is a new line
@@ -268,7 +294,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     if (!snapshot) return
     editing = annotation.id
     const badge = popover.querySelector<HTMLSpanElement>('.badge')!
-    badge.textContent = `#${annotation.id}`
+    badge.textContent = annotation.id === NEW ? '#…' : `#${annotation.id}`
     badge.style.background = annotation.color
     comment.value = annotation.comment
     popover.hidden = false
@@ -292,6 +318,10 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   }
 
   function saveComment() {
+    if (editing === NEW) {
+      unsaved = comment.value
+      return
+    }
     const annotation = snapshot?.annotations.find((a) => a.id === editing)
     if (editing !== null && comment.value !== annotation?.comment)
       void send({ type: 'annotation/update', id: editing, patch: { comment: comment.value } }).catch(report)
@@ -405,12 +435,20 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     render,
     handle(request) {
       switch (request.type) {
-        case 'capture/prepare':
+        case 'capture/prepare': {
+          // shown as a device, all but its frame hides
+          const device = deviceFrame.prepare()
+          if (device) {
+            host.classList.add('capturing')
+            return new Promise<PreparedCapture>((resolve) => win.requestAnimationFrame(() => win.requestAnimationFrame(() => resolve(device))))
+          }
           host.style.visibility = 'hidden'
           // two frames: the one without the overlay is painted before the capture
           return new Promise<PreparedCapture>((resolve) => win.requestAnimationFrame(() => win.requestAnimationFrame(() => resolve(viewportOf(win)))))
+        }
         case 'capture/restore':
           host.style.visibility = ''
+          host.classList.remove('capturing')
           return Promise.resolve(null)
         case 'highlight':
           highlighted = request.id
@@ -421,6 +459,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       }
     },
     destroy() {
+      deviceFrame.destroy()
       win.removeEventListener('keydown', onKey, true)
       host.remove()
     },

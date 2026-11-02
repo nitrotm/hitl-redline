@@ -1,7 +1,7 @@
 import { isUnder } from '@redline/shared'
 
 import { BridgeError, bridgeStatus, postRound } from '@/src/bridge-client.ts'
-import { composite } from '@/src/capture/composite.ts'
+import { composite, crop } from '@/src/capture/composite.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Reply, Request, Responses } from '@/src/messages.ts'
 import { deleteImage, deleteSessionImages, getImage, putImage } from '@/src/state/images.ts'
 import {
@@ -84,7 +84,8 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
 
   switch (request.type) {
     case 'ui/set':
-      return change(tabId, (s) => ({ ...s, tool: request.tool ?? s.tool, color: request.color ?? s.color }))
+      if (!(await getSession(tabId))?.active) await start(tabId)
+      return change(tabId, (s) => ({ ...s, tool: request.tool ?? s.tool, color: request.color ?? s.color, device: request.device ?? s.device }))
     case 'annotation/add':
       return update(tabId, (s) => addAnnotation(required(s), request.annotation))
     case 'annotation/update':
@@ -187,7 +188,10 @@ async function capture(tabId: number): Promise<CaptureResult> {
       await tell(tabId, { type: 'capture/restore' })
     }
 
-    const [next, snapshot] = takeSnapshot(session, { ...prepared, capturedAt: new Date().toISOString() })
+    // shown as a device: its frame, out of the window's screenshot
+    const { device, ...capture } = prepared
+    if (device) clean = await crop(clean, device.crop, device.windowWidth)
+    const [next, snapshot] = takeSnapshot(session, { ...capture, device: device?.label, capturedAt: new Date().toISOString() })
     await putImage(session.id, snapshot.id, clean)
     return [next, { snapshotId: snapshot.id }]
   })

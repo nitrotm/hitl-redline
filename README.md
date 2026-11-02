@@ -70,6 +70,13 @@ saves. Double-click a mark to edit its comment again.
 
 The toolbar's ✕ leaves the screenshot, back to the live page; its grip moves it out of the way.
 
+To see the responsive layouts, pick a device in the toolbar's dropdown (or the sidebar's) before
+the screenshot: Phone (iPhone 15, 393×852), Tablet (iPad Air, 820×1180), Laptop 14″ FHD
+(1536×864) or Desktop 4K (2560×1440), in CSS pixels; `packages/extension/src/devices.ts` has
+them. The page shows in a frame of that size, scaled down when the window is smaller, and the
+screenshot is the frame's. The frame loads the page anew, and its pixel ratio is the window's,
+scaled: a 4K layout on a smaller screen is captured smaller.
+
 Click the Redline button of the browser's toolbar to open the sidebar. It lists the
 screenshots of the round, and the marks of each with their comment:
 

@@ -13,7 +13,8 @@ export type AnnotationPatch = { comment?: string; color?: string; target?: Targe
 )
 
 export type Request =
-  | { type: 'ui/set'; tabId?: number; tool?: Tool; color?: string }
+  // the tool, the color, the device; it starts the session if need be
+  | { type: 'ui/set'; tabId?: number; tool?: Tool; color?: string; device?: string }
   | { type: 'annotation/add'; tabId?: number; annotation: NewAnnotation }
   | { type: 'annotation/update'; tabId?: number; id: number; patch: AnnotationPatch }
   | { type: 'annotation/delete'; tabId?: number; id: number }
@@ -62,6 +63,9 @@ export interface PreparedCapture {
   viewport: Viewport
   url: string
   title: string
+  // shown as a device: its label, and where its frame is in the window (CSS px), to crop the
+  // window's screenshot to
+  device?: { label: string; crop: { x: number; y: number; width: number; height: number }; windowWidth: number }
 }
 
 // the background answers { ok, value } or { ok: false, error }, which send() turns back into a throw

@@ -57,6 +57,18 @@ function drawBadge(ctx: OffscreenCanvasRenderingContext2D, annotation: Annotatio
   ctx.restore()
 }
 
+// A part of a screenshot of the window, given in the window's CSS pixels: the screenshot is
+// WINDOW_WIDTH of them wide.
+export async function crop(png: string, rect: { x: number; y: number; width: number; height: number }, windowWidth: number): Promise<string> {
+  const bitmap = await createImageBitmap(await (await fetch(png)).blob())
+  const scale = bitmap.width / windowWidth
+  const [x, y, width, height] = [rect.x, rect.y, rect.width, rect.height].map((v) => Math.round(v * scale)) as [number, number, number, number]
+  const canvas = new OffscreenCanvas(width, height)
+  canvas.getContext('2d')!.drawImage(bitmap, x, y, width, height, 0, 0, width, height)
+  bitmap.close()
+  return pngDataUrl(await canvas.convertToBlob({ type: 'image/png' }))
+}
+
 async function pngDataUrl(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer())
   let binary = ''

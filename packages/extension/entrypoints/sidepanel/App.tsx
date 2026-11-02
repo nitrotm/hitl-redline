@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 
 import type { Annotation, Snapshot, Status } from '@redline/shared'
 
+import { DEVICES, WINDOW } from '@/src/devices.ts'
 import { badgeFor, fillPath } from '@/src/geometry.ts'
 import { type Request, send } from '@/src/messages.ts'
 import type { Session } from '@/src/state/session.ts'
@@ -68,15 +69,37 @@ function Help() {
   )
 }
 
+// the size the page is shown at, before a screenshot: phone, tablet… or the window itself
+function DevicePicker({ tabId, session, ask, disabled }: { tabId: number; session: Session | undefined; ask: Ask; disabled?: boolean }) {
+  return (
+    <select
+      class="device-picker"
+      title="Show the page as a device"
+      disabled={disabled}
+      value={session?.active ? session.device : WINDOW}
+      onChange={(e) => ask({ type: 'ui/set', tabId, device: e.currentTarget.value })}>
+      <option value={WINDOW}>This window</option>
+      {DEVICES.map((d) => (
+        <option key={d.id} value={d.id}>
+          {d.label} · {d.width}×{d.height}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 function Start({ tab, session, ask }: { tab: ActiveTab; session: Session | undefined; ask: Ask }) {
   return (
     <div class="start">
       <p class="page" title={tab.url}>
         {tab.title || tab.url}
       </p>
-      <button class="primary" onClick={() => ask({ type: 'snapshot/capture', tabId: tab.id })}>
-        Take a screenshot
-      </button>
+      <div class="capture-row">
+        <DevicePicker tabId={tab.id} session={session} ask={ask} />
+        <button class="primary" onClick={() => ask({ type: 'snapshot/capture', tabId: tab.id })}>
+          Take a screenshot
+        </button>
+      </div>
       {session?.lastSent?.status === 'done' && <p class="note">Finished: the last round went to {shortPath(session.lastSent.directory)}.</p>}
       <Help />
     </div>
@@ -91,7 +114,8 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
 
   return (
     <div class="session">
-      <div class="capture">
+      <div class="capture capture-row">
+        <DevicePicker tabId={tabId} session={session} ask={ask} disabled={locked} />
         <button class="primary" disabled={locked} onClick={() => ask({ type: 'snapshot/capture', tabId })} title="A screenshot of the page, to annotate (C)">
           Take a screenshot
         </button>
@@ -161,7 +185,7 @@ function SnapshotView({ tabId, session, snapshot, ask, disabled }: { tabId: numb
     <section class={current ? 'current' : ''}>
       <div class="section-head">
         <h2>
-          {snapshot.id} <span class="meta">{time}</span>
+          {snapshot.id} <span class="meta">{[snapshot.device, time].filter(Boolean).join(' · ')}</span>
         </h2>
         <div class="tools">
           {current ? (

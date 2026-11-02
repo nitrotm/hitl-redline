@@ -92,7 +92,7 @@ function renderSnapshot(snapshot: SnapshotWithImages | Snapshot): string[] {
     '',
     `- URL: ${snapshot.url}`,
     `- Screenshot: \`${files.annotated}\` (without the annotations: \`${files.clean}\`)`,
-    `- Viewport: ${v.width}×${v.height} CSS px, dpr ${v.dpr}, scrolled to (${Math.round(v.scrollX)}, ${Math.round(v.scrollY)})`,
+    `- Viewport: ${v.width}×${v.height} CSS px${snapshot.device ? `, as a ${snapshot.device}` : ''}, dpr ${Number(v.dpr.toFixed(2))}, scrolled to (${Math.round(v.scrollX)}, ${Math.round(v.scrollY)})`,
     '',
   ]
   if (snapshot.annotations.length === 0) lines.push('No annotations.', '')

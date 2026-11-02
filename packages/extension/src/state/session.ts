@@ -1,5 +1,6 @@
 import { type Annotation, type FeedbackRound, type RoundStatus, SCHEMA_VERSION, type Snapshot, type SnapshotWithImages, type Viewport } from '@redline/shared'
 
+import { WINDOW } from '../devices.ts'
 import { COLORS } from '../geometry.ts'
 import type { AnnotationPatch, NewAnnotation } from '../messages.ts'
 
@@ -29,6 +30,8 @@ export interface Session {
   comment: string
   tool: Tool
   color: string
+  // the device the page is shown as (src/devices.ts), or the window itself
+  device: string
   // submitted, until the bridge takes it: the round is built from the session when it is sent
   pending?: { status: RoundStatus; queuedAt: string; error?: string }
   lastSent?: { round: number; status: RoundStatus; directory: string; at: string }
@@ -46,6 +49,7 @@ export function createSession(tabId: number, id: string): Session {
     comment: '',
     tool: 'rect',
     color: COLORS[0],
+    device: WINDOW,
   }
 }
 
@@ -93,6 +97,7 @@ export interface Capture {
   url: string
   title: string
   capturedAt: string
+  device?: string
   viewport: Viewport
 }
 

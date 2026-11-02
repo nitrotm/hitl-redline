@@ -59,6 +59,8 @@ export const Snapshot = z.object({
   url: z.string(),
   title: z.string(),
   capturedAt: z.iso.datetime(),
+  // the device the page was shown as, if not the window itself: its viewport is the device's
+  device: z.string().optional(),
   viewport: Viewport,
   annotations: z.array(Annotation),
 })

@@ -1,0 +1,13 @@
+{
+  "name": "redline",
+  "owner": {
+    "name": "Antony Ducommun"
+  },
+  "plugins": [
+    {
+      "name": "redline",
+      "source": "./claude",
+      "description": "/redline: annotated screenshots from Firefox, as feedback for Claude Code."
+    }
+  ]
+}

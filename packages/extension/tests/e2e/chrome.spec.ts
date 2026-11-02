@@ -83,6 +83,17 @@ test('screenshot, draw, comment and send a round', async () => {
   await expect(popover).toHaveValue('Too much empty space here')
   await page.keyboard.press('Escape')
 
+  // a mark drawn by mistake, deleted from its comment box at once: #3 is gone, #1 and #2 stay
+  await page.mouse.move(900, 600)
+  await page.mouse.down()
+  await page.mouse.move(980, 650, { steps: 4 })
+  await page.mouse.up()
+  await expect(popover).toBeFocused()
+  await page.locator('redline-overlay .popover .trash').click()
+  await expect(popover).toBeHidden()
+  await expect(page.locator('redline-overlay g.mark[data-id="3"]')).toHaveCount(0)
+  await expect(page.locator('redline-overlay g.mark[data-id]:not([data-id="0"])')).toHaveCount(2)
+
   // the sidebar, opened in a tab of its own, has both, with their comments
   const sidebar = await context.newPage()
   await sidebar.goto(`chrome-extension://${extensionId}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)

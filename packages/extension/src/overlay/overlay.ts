@@ -77,6 +77,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     <div class="popover" hidden>
       <span class="badge"></span>
       <textarea rows="2" placeholder="What should change here? Enter to save, Esc to close"></textarea>
+      <button class="trash" title="Delete this mark">${ICONS.trash}</button>
     </div>
     <div class="toast" hidden></div>`
   doc.documentElement.append(host)
@@ -113,6 +114,8 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   let editing: number | null = null
   // what was typed for a NEW mark, closed before its id came
   let unsaved: string | undefined
+  // a NEW mark deleted before its id came: deleted once it comes
+  let deleteOnAdd = false
 
   // a pointer's position, in the page's coordinates of the snapshot: the screenshot's, scaled to
   // the window, plus the scroll it was taken at
@@ -256,6 +259,12 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     shapes.append(shapeElement(drawn, { selected: false, highlighted: false }))
     openPopover(drawn)
     send({ type: 'annotation/add', annotation: target ? { ...annotation, target } : annotation }).then((added) => {
+      if (deleteOnAdd) {
+        deleteOnAdd = false
+        unsaved = undefined
+        void send({ type: 'annotation/delete', id: added.id }).catch(report)
+        return
+      }
       if (editing === NEW) {
         editing = added.id
         popover.querySelector<HTMLSpanElement>('.badge')!.textContent = `#${added.id}`
@@ -340,6 +349,16 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     if (editing !== null && comment.value !== annotation?.comment)
       void send({ type: 'annotation/update', id: editing, patch: { comment: comment.value } }).catch(report)
   }
+
+  // the mark, deleted from its comment box; the box keeps the focus until the click is done
+  const trash = popover.querySelector<HTMLButtonElement>('.trash')!
+  trash.addEventListener('pointerdown', (e) => e.preventDefault())
+  trash.addEventListener('click', () => {
+    const id = editing
+    closePopover(false)
+    if (id === NEW) deleteOnAdd = true
+    else if (id !== null) void send({ type: 'annotation/delete', id }).catch(report)
+  })
 
   comment.addEventListener('input', () => {
     clearTimeout(saveTimer)

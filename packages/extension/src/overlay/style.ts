@@ -80,6 +80,11 @@ export const OVERLAY_CSS = `
   border: 1px solid #d4d4d8; border-radius: 6px; padding: 5px 7px; outline: none;
 }
 .popover textarea:focus { border-color: #e11d48; }
+.popover .trash {
+  all: unset; flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; cursor: pointer; color: #71717a;
+}
+.popover .trash:hover { background: #fee2e2; color: #b91c1c; }
+.popover .trash:focus-visible { outline: 2px solid #60a5fa; }
 
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); max-width: 420px; padding: 8px 12px; border-radius: 8px;

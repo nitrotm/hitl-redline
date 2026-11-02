@@ -18,6 +18,8 @@ const SVG = 'http://www.w3.org/2000/svg'
 const MIN_SIZE = 4
 // an arrow shorter than this is a slip
 const MIN_ARROW = 12
+// how far from a mark's box a double click still hits it
+const HIT = 6
 // by the keys' places (KeyboardEvent.code), whatever the layout: the tools on 1 to 4, the colors
 // on the row under them (COLOR_KEYS)
 const TOOL_KEYS: Record<string, Tool> = { Digit1: 'select', Digit2: 'rect', Digit3: 'arrow', Digit4: 'freehand' }
@@ -272,10 +274,19 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     drawShapes()
   })
 
+  // A double click edits a mark's comment, whatever the tool: the mark under the pointer, or,
+  // marks not taking the pointer while a drawing tool is on, the last drawn whose box is there (a
+  // double click draws nothing: too small).
   svg.addEventListener('dblclick', (e) => {
+    if (!snapshot) return
     const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
-    const annotation = snapshot?.annotations.find((a) => a.id === Number(shape?.dataset.id))
-    if (annotation) openPopover(annotation)
+    const p = page(e)
+    const near = (a: Annotation) => {
+      const box = boundingBox(a)
+      return p.x >= box.x - HIT && p.x <= box.x + box.width + HIT && p.y >= box.y - HIT && p.y <= box.y + box.height + HIT
+    }
+    const annotation = shape ? snapshot.annotations.find((a) => a.id === Number(shape.dataset.id)) : snapshot.annotations.findLast(near)
+    if (annotation) openPopover(annotation, true)
   })
 
   // the screenshot does not scroll: the page under it must not either
@@ -292,7 +303,8 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
 
   // the comment of a mark, where it is, at once: Enter saves, Esc closes, Shift+Enter is a new line
   let saveTimer: ReturnType<typeof setTimeout> | undefined
-  function openPopover(annotation: Annotation) {
+  // SELECT: all of the comment, to type over it
+  function openPopover(annotation: Annotation, select = false) {
     if (!snapshot) return
     editing = annotation.id
     const badge = popover.querySelector<HTMLSpanElement>('.badge')!
@@ -308,6 +320,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     popover.style.left = `${Math.min(Math.max(8, below.x), win.innerWidth - popover.offsetWidth - 8)}px`
     popover.style.top = `${top}px`
     comment.focus()
+    if (select) comment.select()
   }
 
   function closePopover(save: boolean) {

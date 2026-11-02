@@ -304,7 +304,13 @@ function Mark({
       onMouseEnter={() => highlight(annotation.id)}
       onMouseLeave={() => highlight(null)}
       // selected here, it is selected on the page, its snapshot shown
-      onClick={() => !selected && !disabled && ask({ type: 'annotation/select', tabId, id: annotation.id })}>
+      onClick={() => !selected && !disabled && ask({ type: 'annotation/select', tabId, id: annotation.id })}
+      // its comment, all of it selected, to type over it
+      onDblClick={() => {
+        const area = item.current?.querySelector('textarea')
+        area?.focus()
+        area?.select()
+      }}>
       <span class="badge" style={{ background: annotation.color }}>
         #{annotation.id}
       </span>

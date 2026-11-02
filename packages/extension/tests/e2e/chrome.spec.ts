@@ -68,6 +68,13 @@ test('screenshot, draw, comment and send a round', async () => {
   await page.keyboard.press('Enter')
   await expect(page.locator('redline-overlay text', { hasText: '#2' })).toBeVisible()
 
+  // a double click on #1, the arrow still the tool: its comment, all of it selected
+  await page.mouse.dblclick(button.x + button.width / 2, button.y + button.height / 2)
+  await expect(popover).toBeFocused()
+  await expect(popover).toHaveValue('Make the button bigger')
+  expect(await popover.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 'Make the button bigger'.length])
+  await page.keyboard.press('Escape')
+
   // the sidebar, opened in a tab of its own, has both, with their comments
   const sidebar = await context.newPage()
   await sidebar.goto(`chrome-extension://${extensionId}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)

@@ -540,11 +540,13 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     if (e.altKey || e.metaKey) return
     // a new screenshot, from wherever the focus is: Ctrl+S, the browser's Save Page otherwise, which
     // yields to the page that takes it (S by its letter: a screenshot, on any layout). Of the live
-    // page only: on a screenshot, nothing (but no Save Page either).
+    // page only: on a screenshot, it goes back to the live page, for the next one.
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault()
       e.stopPropagation()
-      return snapshot ? undefined : capture()
+      if (!snapshot) return capture()
+      if (editing !== null) closePopover(true)
+      return act('close')
     }
     // the round to Claude, from wherever the focus is: Ctrl+D, the browser's bookmark otherwise; Done
     // when there is nothing to send. The comment being typed, and the pen's strokes, go first.

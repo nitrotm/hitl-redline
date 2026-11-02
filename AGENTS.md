@@ -82,6 +82,9 @@ nix flake check         # builds the workspace: typecheck and tests included
 - **`packages/shared/src/schema.ts` is the contract.** A change there changes the writer
   (`renderFeedback`), the extension's `buildRound`, their tests, and `SCHEMA_VERSION` if it
   breaks older rounds.
+- **Each `redline wait` takes the first free port of `PORTS`** (47390-47399): several projects'
+  loops run at once. The extension asks every port, and sends a tab's round to the bridge of its
+  preview (`pickBridge`); the end-to-end tests' bridges take free ports the same way.
 - **The bridge listens on 127.0.0.1 only**, and refuses a request with a web page's `Origin` or
   another `Host`. Keep both checks.
 - **Node runs the bridge's sources as they are** (type stripping): only erasable TypeScript there

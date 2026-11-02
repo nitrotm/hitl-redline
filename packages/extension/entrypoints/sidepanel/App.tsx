@@ -16,7 +16,7 @@ import { type ActiveTab, useActiveTab, useBridge, useImage, useSession } from '.
 export function App() {
   const tab = useActiveTab()
   const session = useSession(tab?.id)
-  const bridge = useBridge(Boolean(session?.pending))
+  const bridge = useBridge(tab?.url, session?.id, Boolean(session?.pending))
   // Claude's reply to this session's last round, as the bridge serves it: kept in the session
   const reply = bridge?.reply
   useEffect(() => {
@@ -91,7 +91,7 @@ function StatusBar({ status }: { status: Status | undefined }) {
 
 // the keys, one per row: a key's names are joined by +, keys side by side are alternatives
 const SHORTCUTS: [string[][], string][] = [
-  [[['Ctrl', 'S']], 'Take a screenshot of the live page, to draw on'],
+  [[['Ctrl', 'S']], 'Take a screenshot of the live page, to draw on; on a screenshot, back to the live page'],
   [[['1']], 'Select and move a mark'],
   [[['2']], 'Rectangle'],
   [[['3']], 'Arrow, from its start to what it points at'],
@@ -195,7 +195,9 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
     <div class="session">
       {/* a screenshot is of the live page: while one is annotated, the way back to it */}
       {session.current ? (
-        <p class="capture note">Annotating {session.current}. Click its preview again (or ✕ on the page) to go back to the page, and take another.</p>
+        <p class="capture note">
+          Annotating {session.current}. Click its preview again (or Ctrl+S, or ✕ on the page) to go back to the page, and take another.
+        </p>
       ) : (
         <div class="capture capture-row">
           <DevicePicker tabId={tabId} session={session} ask={ask} disabled={locked} />

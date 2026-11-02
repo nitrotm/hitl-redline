@@ -2,9 +2,11 @@ import { z } from 'zod'
 
 import { Reply } from './schema.ts'
 
-// How the extension talks to `redline wait`: HTTP on the loopback, one round per run.
+// How the extension talks to `redline wait`: HTTP on the loopback, one round per run. Each run
+// takes the first free port of PORTS, so that the loops of several projects run at once; the
+// extension asks them all, and sends a tab's round to the one of its preview (pickBridge).
 
-export const DEFAULT_PORT = 47390
+export const PORTS = Array.from({ length: 10 }, (_, i) => 47390 + i)
 export const PORT_ENV = 'REDLINE_PORT'
 
 export const ENDPOINTS = {
@@ -49,6 +51,20 @@ export const RoundAccepted = z.object({
   directory: z.string(),
 })
 export type RoundAccepted = z.infer<typeof RoundAccepted>
+
+// a bridge that answered, on its port
+export interface Bridge {
+  port: number
+  status: Status
+}
+
+// The bridge for a tab: one whose preview the tab shows (`redline wait --url`), the one that
+// replies to the tab's session first; or else one waiting for any page (no --url).
+export function pickBridge(bridges: Bridge[], tabUrl: string | undefined, sessionId?: string): Bridge | undefined {
+  const forPage = bridges.filter((b) => b.status.url && tabUrl && isUnder(tabUrl, b.status.url))
+  const candidates = forPage.length ? forPage : bridges.filter((b) => !b.status.url)
+  return candidates.find((b) => sessionId && b.status.reply?.sessionId === sessionId) ?? candidates[0]
+}
 
 export function bridgeUrl(port: number, endpoint: keyof typeof ENDPOINTS): string {
   return `http://127.0.0.1:${port}${ENDPOINTS[endpoint]}`

@@ -211,8 +211,11 @@ test('show the page as a phone, and capture it so', async () => {
   await page.keyboard.press('Enter')
 
   await expect(sidebar.locator('h2', { hasText: 'Phone (iPhone 15)' })).toBeVisible()
-  // sent with Ctrl+D, from the page
+  // Ctrl+S on the screenshot: back to the live page
   await page.bringToFront()
+  await page.keyboard.press('Control+s')
+  await expect(page.locator('redline-overlay .frozen')).toBeHidden()
+  // sent with Ctrl+D, from the page
   await page.keyboard.press('Control+d')
 
   const { code, stdout } = await bridge.done

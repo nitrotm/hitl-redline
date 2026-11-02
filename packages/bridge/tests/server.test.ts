@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { request } from 'node:http'
+import { createServer, request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -14,7 +14,7 @@ function listen() {
   return new Promise<{ port: number; root: string; received: ReturnType<typeof waitForRound> }>(async (resolve) => {
     const root = await mkdtemp(join(tmpdir(), 'redline-'))
     const received = waitForRound({
-      port: 0,
+      ports: [0],
       root,
       project: '/project',
       url: 'http://localhost:5173/',
@@ -64,6 +64,24 @@ describe('waitForRound', () => {
     expect((await post(port, JSON.stringify(makeRound()), { host: `evil.example:${port}` })).status).toBe(403)
     await post(port, JSON.stringify(makeRound()))
     await received
+  })
+
+  it('listens on the next port while one is in use', async () => {
+    const busy = createServer()
+    await new Promise<void>((resolve) => busy.listen(0, '127.0.0.1', resolve))
+    const taken = (busy.address() as { port: number }).port
+    const free = createServer()
+    await new Promise<void>((resolve) => free.listen(0, '127.0.0.1', resolve))
+    const next = (free.address() as { port: number }).port
+    await new Promise((resolve) => free.close(resolve))
+
+    const root = await mkdtemp(join(tmpdir(), 'redline-'))
+    const port = await new Promise<number>(
+      (resolve) => void waitForRound({ ports: [taken, next], root, project: '/p', onListening: resolve }).catch(() => undefined)
+    )
+    expect(port).toBe(next)
+    await post(port, JSON.stringify(makeRound()))
+    busy.close()
   })
 
   it('refuses an invalid round, and keeps waiting', async () => {

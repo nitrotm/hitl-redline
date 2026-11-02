@@ -1,8 +1,19 @@
-import { DEFAULT_PORT, EXTENSION_HEADER, type FeedbackRound, RoundAccepted, Status, bridgeUrl } from '@redline/shared'
+import { type Bridge, EXTENSION_HEADER, type FeedbackRound, PORTS, RoundAccepted, Status, bridgeUrl, pickBridge } from '@redline/shared'
 
-// `redline wait`, on the loopback: listening only while Claude waits for a round.
+// The `redline wait`s, on the loopback: each listening only while Claude waits for a round, one
+// per project, each on its own port of PORTS.
 
-export async function bridgeStatus(port = DEFAULT_PORT): Promise<Status | undefined> {
+export async function bridges(): Promise<Bridge[]> {
+  const found = await Promise.all(PORTS.map(async (port) => ({ port, status: await bridgeStatus(port) })))
+  return found.flatMap(({ port, status }) => (status ? [{ port, status }] : []))
+}
+
+// the bridge of the page a tab shows (src: pickBridge)
+export async function bridgeFor(tabUrl: string | undefined, sessionId?: string): Promise<Bridge | undefined> {
+  return pickBridge(await bridges(), tabUrl, sessionId)
+}
+
+async function bridgeStatus(port: number): Promise<Status | undefined> {
   try {
     // with the extension's base URL, which `redline status` tells: its sidebar can open in a tab
     const response = await fetch(bridgeUrl(port, 'status'), {
@@ -24,7 +35,7 @@ export class BridgeError extends Error {
   }
 }
 
-export async function postRound(round: FeedbackRound, port = DEFAULT_PORT): Promise<RoundAccepted> {
+export async function postRound(round: FeedbackRound, port: number): Promise<RoundAccepted> {
   let response: Response
   try {
     response = await fetch(bridgeUrl(port, 'rounds'), {

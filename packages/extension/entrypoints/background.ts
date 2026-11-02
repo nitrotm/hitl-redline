@@ -1,6 +1,6 @@
 import { type Rendered, isUnder } from '@redline/shared'
 
-import { BridgeError, bridgeStatus, postRound } from '@/src/bridge-client.ts'
+import { BridgeError, bridgeFor, postRound } from '@/src/bridge-client.ts'
 import { composite, crop } from '@/src/capture/composite.ts'
 import { inspectPage } from '@/src/frameworks.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Request, Responses, Result } from '@/src/messages.ts'
@@ -66,8 +66,9 @@ export default defineBackground(() => {
     const session = await getSession(tabId)
     if (session?.active) await inject(tabId).catch(() => undefined)
     else if ((!session || (session.lastSent?.status === 'done' && !session.pending)) && tab.url && /^https?:/.test(tab.url)) {
-      const status = await bridgeStatus()
-      if (status?.url && isUnder(tab.url, status.url)) await start(tabId).catch(() => undefined)
+      // a bridge for that very page: not one waiting for any
+      const bridge = await bridgeFor(tab.url)
+      if (bridge?.status.url && isUnder(tab.url, bridge.status.url)) await start(tabId).catch(() => undefined)
     }
   })
   browser.tabs.onRemoved.addListener((tabId) => void discard(tabId))
@@ -239,7 +240,11 @@ async function flush(): Promise<null> {
           const clean = await getImage(session.id, snapshot.id)
           if (clean) images.set(snapshot.id, { clean, annotated: await composite(clean, snapshot.annotations, snapshot.viewport) })
         }
-        const accepted = await postRound(buildRound(session, images))
+        // the bridge of the page the tab shows, if one listens
+        const tab = await browser.tabs.get(session.tabId).catch(() => undefined)
+        const bridge = await bridgeFor(tab?.url, session.id)
+        if (!bridge) throw new BridgeError('Claude is not listening', true)
+        const accepted = await postRound(buildRound(session, images), bridge.port)
         await update(session.tabId, (s) => [s && roundSent(s, accepted.directory, new Date().toISOString()), null])
         for (const snapshot of session.snapshots) await deleteImage(session.id, snapshot.id)
         if (session.pending.status === 'done') await deleteSessionImages(session.id)

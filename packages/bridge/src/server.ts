@@ -5,7 +5,8 @@ import { ENDPOINTS, EXTENSION_HEADER, FeedbackRound, MAX_ROUND_BYTES, type Reply
 import { type WrittenRound, writeRound } from './writer.ts'
 
 export interface WaitOptions {
-  port: number
+  // the first of them that is free (0: any)
+  ports: number[]
   // where the rounds go: <root>/rounds/NNN
   root: string
   // the project the round is for, shown in the sidebar
@@ -76,16 +77,23 @@ export function waitForRound(options: WaitOptions): Promise<ReceivedRound> {
       })
     }
 
+    // the next port while one is in use: another `redline wait`, of another project
+    let next = 0
+    const listen = () => server.listen(options.ports[next], '127.0.0.1')
     server.on('error', (error: NodeJS.ErrnoException) => {
-      reject(error.code === 'EADDRINUSE' ? new Error(`port ${options.port} is in use: is another \`redline wait\` running?`) : error)
+      if (error.code === 'EADDRINUSE' && ++next < options.ports.length) return listen()
+      reject(
+        error.code === 'EADDRINUSE'
+          ? new Error(`port${options.ports.length > 1 ? 's' : ''} ${options.ports.join(', ')} in use: other \`redline wait\`s are running`)
+          : error
+      )
     })
+    server.on('listening', () => options.onListening?.((server.address() as { port: number }).port))
     options.signal?.addEventListener('abort', () => {
       server.close()
       reject(options.signal?.reason)
     })
-    server.listen(options.port, '127.0.0.1', () => {
-      options.onListening?.((server.address() as { port: number }).port)
-    })
+    listen()
   })
 }
 

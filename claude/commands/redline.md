@@ -28,8 +28,9 @@ loopback for one round, writes it to `.redline/rounds/NNN/`, prints the path of 
 and exits. That exit wakes you up. Start it **before** opening the page: Redline starts by itself
 on a tab of the preview only while a `redline wait` names it.
 
-If it fails because the port is in use, another `redline wait` is running. Check with
-`redline status`, and stop the stale one if it is yours.
+Each `redline wait` takes the first free port of 47390-47399, so the loops of several projects run
+at once; the extension sends a tab's round to the one whose `--url` the tab shows. If it fails
+because all ten are in use, `redline status` lists them: stop the stale ones that are yours.
 
 Then:
 

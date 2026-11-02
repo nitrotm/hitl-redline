@@ -21,8 +21,8 @@ It has three parts:
 
 - **The extension** (`packages/extension`), for Firefox, and for Chrome too. It draws on the page,
   lists the marks in the sidebar, captures snapshots, and sends each round.
-- **The bridge** (`packages/bridge`), `redline`: `redline wait` listens on `127.0.0.1:47390` for
-  one round, writes it to `.redline/rounds/NNN/` in the project, prints the path of its
+- **The bridge** (`packages/bridge`), `redline`: `redline wait` listens on the loopback, on the first
+  free port of 47390-47399 (one per project waiting), for one round, writes it to `.redline/rounds/NNN/` in the project, prints the path of its
   `feedback.md`, and exits. Claude runs it in the background, so it is woken up when you send.
 - **The `/redline` command** (`claude/`), a Claude Code plugin that runs the loop.
 
@@ -57,18 +57,18 @@ A screenshot comes first: <kbd>Ctrl</kbd>+<kbd>S</kbd> on the page, or the sideb
 frozen, and you draw on it. Each mark opens a comment box at once: type, <kbd>Enter</kbd>
 saves. Double-click a mark or its number, whatever the tool, to edit its comment again: all of it selected, to type over it. The box's trash icon deletes the mark.
 
-| Key                                                 | Tool                                                              |
-| --------------------------------------------------- | ----------------------------------------------------------------- |
-| <kbd>Ctrl</kbd>+<kbd>S</kbd>                        | Take a screenshot (of the live page)                              |
-| <kbd>1</kbd>                                        | Select: move a mark, or select it                                 |
-| <kbd>2</kbd>                                        | Rectangle                                                         |
-| <kbd>3</kbd>                                        | Arrow: press where it starts, release where it points             |
-| <kbd>4</kbd>                                        | Pen: strokes 500 ms apart or less make one mark; a click is a dot |
-| <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> | Colors (and the selected mark's)                                  |
-| <kbd>Del</kbd>                                      | Delete the selected mark                                          |
-| <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                                |
-| <kbd>Ctrl</kbd>+<kbd>D</kbd>                        | Send to Claude; Done when there is nothing to send                |
-| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                                 |
+| Key                                                 | Tool                                                                       |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd>                        | Take a screenshot of the live page; on a screenshot, back to the live page |
+| <kbd>1</kbd>                                        | Select: move a mark, or select it                                          |
+| <kbd>2</kbd>                                        | Rectangle                                                                  |
+| <kbd>3</kbd>                                        | Arrow: press where it starts, release where it points                      |
+| <kbd>4</kbd>                                        | Pen: strokes 500 ms apart or less make one mark; a click is a dot          |
+| <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> | Colors (and the selected mark's)                                           |
+| <kbd>Del</kbd>                                      | Delete the selected mark                                                   |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                                         |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd>                        | Send to Claude; Done when there is nothing to send                         |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                                          |
 
 The tools and colors go by their places on the keyboard, not their letters: the colors are the
 row under the digits whatever the layout (A Z E R on AZERTY). While Redline is on,

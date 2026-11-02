@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { aim } from '../src/geometry.ts'
-import { isExtensionOrigin, isUnder } from '../src/protocol.ts'
+import { isExtensionOrigin, isUnder, pickBridge } from '../src/protocol.ts'
 
 describe('isExtensionOrigin', () => {
   it('takes the origins of Firefox and Chrome extensions', () => {
@@ -36,5 +36,23 @@ describe('aim', () => {
     const base = { id: 1, color: '', comment: '' }
     expect(aim({ ...base, kind: 'arrow', from: { x: 0, y: 0 }, to: { x: 40, y: 10 } })).toEqual({ x: 40, y: 10 })
     expect(aim({ ...base, kind: 'rect', rect: { x: 10, y: 10, width: 20, height: 40 } })).toEqual({ x: 20, y: 30 })
+  })
+})
+
+describe('pickBridge', () => {
+  const at = (port: number, url?: string, replyTo?: string) => ({
+    port,
+    status: { app: 'redline' as const, project: `/p${port}`, pid: port, ...(url && { url }), ...(replyTo && { reply: { sessionId: replyTo, round: 1 } }) },
+  })
+
+  it("takes the bridge of the tab's preview, not another project's", () => {
+    const bridges = [at(47390, 'http://localhost:5173/'), at(47391, 'http://localhost:3000/')]
+    expect(pickBridge(bridges, 'http://localhost:3000/settings')?.port).toBe(47391)
+    expect(pickBridge(bridges, 'http://localhost:8080/')).toBeUndefined()
+  })
+
+  it("prefers the one replying to the tab's session, and else one waiting for any page", () => {
+    expect(pickBridge([at(47390, 'http://localhost:5173/'), at(47391, 'http://localhost:5173/', 's2')], 'http://localhost:5173/', 's2')?.port).toBe(47391)
+    expect(pickBridge([at(47390, 'http://localhost:5173/'), at(47392)], 'http://localhost:8080/')?.port).toBe(47392)
   })
 })

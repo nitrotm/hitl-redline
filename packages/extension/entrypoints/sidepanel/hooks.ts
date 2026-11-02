@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 
 import { type Status, isUnder } from '@redline/shared'
 
-import { bridgeStatus } from '@/src/bridge-client.ts'
+import { bridgeFor } from '@/src/bridge-client.ts'
 import { send } from '@/src/messages.ts'
 import { getImage } from '@/src/state/images.ts'
 import type { Session } from '@/src/state/session.ts'
@@ -67,13 +67,14 @@ export function useSession(tabId: number | undefined): Session | undefined {
 
 const POLL_MS = 2000
 
-// Whether `redline wait` listens, asked every two seconds; when it does, a submitted round goes at once.
-export function useBridge(pending: boolean): Status | undefined {
+// The `redline wait` of the page the tab shows, asked every two seconds; when there is one, a
+// submitted round goes at once.
+export function useBridge(tabUrl: string | undefined, sessionId: string | undefined, pending: boolean): Status | undefined {
   const [status, setStatus] = useState<Status>()
   useEffect(() => {
     let stopped = false
     const poll = async () => {
-      const next = await bridgeStatus()
+      const next = (await bridgeFor(tabUrl, sessionId))?.status
       if (stopped) return
       setStatus(next)
       if (next && pending) await send({ type: 'outbox/flush' }).catch(() => undefined)
@@ -84,7 +85,7 @@ export function useBridge(pending: boolean): Status | undefined {
       stopped = true
       clearInterval(timer)
     }
-  }, [pending])
+  }, [tabUrl, sessionId, pending])
   return status
 }
 

@@ -20,8 +20,26 @@ export const Status = z.object({
   // the directory of the project that waits: the round lands in its .redline/
   project: z.string(),
   pid: z.number().int(),
+  // the preview Claude opened (`redline wait --url`): Redline starts by itself on a tab there
+  url: z.string().optional(),
+  // the base URL of the extension that last asked (EXTENSION_HEADER), for `redline status`
+  extension: z.string().optional(),
 })
 export type Status = z.infer<typeof Status>
+
+// sent by the extension with its status requests: its base URL (moz-extension://<uuid>/)
+export const EXTENSION_HEADER = 'x-redline-extension'
+
+// whether a tab's URL is the preview's, or under it
+export function isUnder(url: string, preview: string): boolean {
+  try {
+    const a = new URL(url)
+    const b = new URL(preview)
+    return a.origin === b.origin && a.pathname.startsWith(b.pathname.replace(/[^/]*$/, ''))
+  } catch {
+    return false
+  }
+}
 
 export const RoundAccepted = z.object({
   directory: z.string(),

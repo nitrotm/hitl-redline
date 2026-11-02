@@ -1,6 +1,6 @@
 import { type IncomingMessage, type ServerResponse, createServer } from 'node:http'
 
-import { ENDPOINTS, FeedbackRound, MAX_ROUND_BYTES, type RoundAccepted, type Status, isExtensionOrigin } from '@redline/shared'
+import { ENDPOINTS, EXTENSION_HEADER, FeedbackRound, MAX_ROUND_BYTES, type RoundAccepted, type Status, isExtensionOrigin } from '@redline/shared'
 
 import { type WrittenRound, writeRound } from './writer.ts'
 
@@ -10,6 +10,8 @@ export interface WaitOptions {
   root: string
   // the project the round is for, shown in the sidebar
   project: string
+  // the preview's URL: the extension starts by itself on a tab there
+  url?: string
   signal?: AbortSignal
   onListening?: (port: number) => void
 }
@@ -23,6 +25,7 @@ export interface ReceivedRound {
 export function waitForRound(options: WaitOptions): Promise<ReceivedRound> {
   return new Promise((resolve, reject) => {
     let received = false
+    let extension: string | undefined
 
     const server = createServer((req, res) => {
       handle(req, res).catch((error: unknown) => {
@@ -40,7 +43,9 @@ export function waitForRound(options: WaitOptions): Promise<ReceivedRound> {
 
       const url = new URL(req.url ?? '/', 'http://127.0.0.1')
       if (url.pathname === ENDPOINTS.status && req.method === 'GET') {
-        const status: Status = { app: 'redline', project: options.project, pid: process.pid }
+        const hello = req.headers[EXTENSION_HEADER]
+        if (typeof hello === 'string' && isExtensionOrigin(hello.replace(/\/$/, ''))) extension = hello
+        const status: Status = { app: 'redline', project: options.project, pid: process.pid, url: options.url, extension }
         return send(res, 200, status)
       }
       if (url.pathname !== ENDPOINTS.rounds) return send(res, 404, { error: 'not found' })

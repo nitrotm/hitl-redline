@@ -11,7 +11,13 @@ import { makeRound } from './fixtures.ts'
 function listen() {
   return new Promise<{ port: number; root: string; received: ReturnType<typeof waitForRound> }>(async (resolve) => {
     const root = await mkdtemp(join(tmpdir(), 'redline-'))
-    const received = waitForRound({ port: 0, root, project: '/project', onListening: (port) => resolve({ port, root, received }) })
+    const received = waitForRound({
+      port: 0,
+      root,
+      project: '/project',
+      url: 'http://localhost:5173/',
+      onListening: (port) => resolve({ port, root, received }),
+    })
   })
 }
 
@@ -29,10 +35,13 @@ function post(port: number, body: string, headers: Record<string, string> = {}) 
 }
 
 describe('waitForRound', () => {
-  it('answers its status', async () => {
+  it('answers its status, with the extension that asked last', async () => {
     const { port, received } = await listen()
-    const response = await fetch(`http://127.0.0.1:${port}/status`)
-    expect(await response.json()).toMatchObject({ app: 'redline', project: '/project' })
+    const status = (headers: Record<string, string> = {}) => fetch(`http://127.0.0.1:${port}/status`, { headers }).then((r) => r.json())
+    expect(await status()).toEqual({ app: 'redline', project: '/project', pid: process.pid, url: 'http://localhost:5173/' })
+    await status({ 'x-redline-extension': 'moz-extension://0f1e2d3c-4b5a/' })
+    await status({ 'x-redline-extension': 'https://evil.example/' })
+    expect(await status()).toMatchObject({ extension: 'moz-extension://0f1e2d3c-4b5a/' })
     await post(port, JSON.stringify(makeRound()))
     await received
   })

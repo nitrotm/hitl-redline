@@ -1,10 +1,14 @@
-import { DEFAULT_PORT, type FeedbackRound, RoundAccepted, Status, bridgeUrl } from '@redline/shared'
+import { DEFAULT_PORT, EXTENSION_HEADER, type FeedbackRound, RoundAccepted, Status, bridgeUrl } from '@redline/shared'
 
 // `redline wait`, on the loopback: listening only while Claude waits for a round.
 
 export async function bridgeStatus(port = DEFAULT_PORT): Promise<Status | undefined> {
   try {
-    const response = await fetch(bridgeUrl(port, 'status'), { signal: AbortSignal.timeout(1500) })
+    // with the extension's base URL, which `redline status` tells: its sidebar can open in a tab
+    const response = await fetch(bridgeUrl(port, 'status'), {
+      headers: { [EXTENSION_HEADER]: browser.runtime.getURL('/') },
+      signal: AbortSignal.timeout(1500),
+    })
     return response.ok ? Status.parse(await response.json()) : undefined
   } catch {
     return undefined

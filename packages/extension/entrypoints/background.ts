@@ -1,4 +1,4 @@
-import { BridgeError, postRound } from '@/src/bridge-client.ts'
+import { BridgeError, bridgeStatus, postRound } from '@/src/bridge-client.ts'
 import { composite } from '@/src/capture/composite.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Reply, Request, Responses } from '@/src/messages.ts'
 import { deleteImages, deleteSessionImages, getImages, putImages } from '@/src/state/images.ts'
@@ -17,6 +17,8 @@ import {
   updateAnnotation,
 } from '@/src/state/session.ts'
 import { getSession, getSessions, update } from '@/src/state/store.ts'
+
+import { isUnder } from '@redline/shared'
 
 // The background owns the sessions: the overlay and the sidebar ask it for every change
 // (src/messages.ts), and watch storage for the result. It captures the snapshots, and sends the
@@ -49,9 +51,17 @@ export default defineBackground(() => {
     else await start(tabId)
   })
 
-  // a reload or a navigation loses the overlay (Claude reloads the page after each round)
-  browser.tabs.onUpdated.addListener(async (tabId, change) => {
-    if (change.status === 'complete' && (await getSession(tabId))?.active) await inject(tabId).catch(() => undefined)
+  // A reload or a navigation loses the overlay (Claude reloads the page after each round). A page
+  // of the preview that `redline wait --url` names starts a session by itself, unless the tab has
+  // one already, even stopped.
+  browser.tabs.onUpdated.addListener(async (tabId, change, tab) => {
+    if (change.status !== 'complete') return
+    const session = await getSession(tabId)
+    if (session?.active) await inject(tabId).catch(() => undefined)
+    else if (!session && tab.url && /^https?:/.test(tab.url)) {
+      const status = await bridgeStatus()
+      if (status?.url && isUnder(tab.url, status.url)) await start(tabId).catch(() => undefined)
+    }
   })
   browser.tabs.onRemoved.addListener((tabId) => void discard(tabId))
 

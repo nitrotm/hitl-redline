@@ -6,7 +6,7 @@ import type { Session, Tool } from '../state/session.ts'
 import { targetAt } from '../target-hint.ts'
 import { OVERLAY_CSS } from './style.ts'
 
-// The marks on the page: an SVG the size of the viewport, over everything, in a closed shadow
+// The marks on the page: an SVG the size of the viewport, over everything, in a shadow
 // root that the page's styles cannot reach. Its shapes are in page coordinates, moved by the
 // scroll, so a mark stays on what it marks. What it draws is the session's drafts; what is drawn
 // goes to the background, and comes back through storage.
@@ -23,7 +23,8 @@ export interface Overlay {
 export function mountOverlay(doc: Document, initial: Session): Overlay {
   const host = doc.createElement('redline-overlay')
   host.style.cssText = 'all: initial; position: fixed; inset: 0; z-index: 2147483647; pointer-events: none;'
-  const root = host.attachShadow({ mode: 'closed' })
+  // open, for the end-to-end tests to reach the toolbar; the page's styles stop at its edge all the same
+  const root = host.attachShadow({ mode: 'open' })
   root.innerHTML = `<style>${OVERLAY_CSS}</style>
     <svg class="canvas" xmlns="${SVG}"><g class="world"><g class="shapes"></g><g class="preview"></g></g></svg>
     <div class="toolbar" part="toolbar">

@@ -18,6 +18,7 @@ options:
   --port N        the bridge's port (default: $${PORT_ENV} or ${DEFAULT_PORT})
   --dir PATH      wait: where the rounds go (default: ./.redline)
   --timeout S     wait: give up after S seconds, with exit code 2 (default: never)
+  --url URL       wait: the preview, where Redline starts by itself once the page loads
 `
 
 async function main(argv: string[]): Promise<number> {
@@ -28,6 +29,7 @@ async function main(argv: string[]): Promise<number> {
       port: { type: 'string' },
       dir: { type: 'string' },
       timeout: { type: 'string' },
+      url: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
   })
@@ -41,7 +43,7 @@ async function main(argv: string[]): Promise<number> {
 
   switch (command) {
     case 'wait':
-      return wait(port, resolve(values.dir ?? '.redline'), values.timeout === undefined ? undefined : Number(values.timeout))
+      return wait(port, resolve(values.dir ?? '.redline'), values.url, values.timeout === undefined ? undefined : Number(values.timeout))
     case 'status':
       return status(port)
     case 'extension-path': {
@@ -56,13 +58,14 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-async function wait(port: number, root: string, timeout: number | undefined): Promise<number> {
+async function wait(port: number, root: string, url: string | undefined, timeout: number | undefined): Promise<number> {
   const signal = timeout === undefined ? undefined : AbortSignal.timeout(timeout * 1000)
   try {
     const { round, written } = await waitForRound({
       port,
       root,
       project: process.cwd(),
+      url,
       signal,
       onListening: (port) => process.stdout.write(`redline: waiting for feedback on http://127.0.0.1:${port} (project ${process.cwd()})\n`),
     })
@@ -87,6 +90,9 @@ async function status(port: number): Promise<number> {
     const response = await fetch(bridgeUrl(port, 'status'))
     const status = Status.parse(await response.json())
     process.stdout.write(`redline: listening on port ${port}, for ${status.project} (pid ${status.pid})\n`)
+    if (status.url) process.stdout.write(`preview: ${status.url}\n`)
+    // the extension that last asked: its sidebar, to open in a tab of its own
+    if (status.extension) process.stdout.write(`sidebar: ${new URL('sidepanel.html', status.extension).href}\n`)
     return 0
   } catch {
     process.stdout.write(`redline: nothing listening on port ${port}\n`)

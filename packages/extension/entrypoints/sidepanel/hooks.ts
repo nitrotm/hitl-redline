@@ -13,13 +13,19 @@ export interface ActiveTab {
   url: string
 }
 
-// the active tab of the sidebar's window, as it changes
+// The tab the sidebar is for: the active one of its window, as it changes; or, opened in a tab of
+// its own (sidepanel.html?tab=ID, for the end-to-end tests and debugging), the one it names.
+const pinned = Number(new URLSearchParams(location.search).get('tab')) || undefined
+
 export function useActiveTab(): ActiveTab | undefined {
   const [tab, setTab] = useState<ActiveTab>()
   useEffect(() => {
     let windowId: number | undefined
     const refresh = async () => {
-      const [active] = await browser.tabs.query({ active: true, ...(windowId === undefined ? { currentWindow: true } : { windowId }) })
+      const [active] =
+        pinned !== undefined
+          ? [await browser.tabs.get(pinned).catch(() => undefined)]
+          : await browser.tabs.query({ active: true, ...(windowId === undefined ? { currentWindow: true } : { windowId }) })
       windowId = active?.windowId
       setTab(active?.id === undefined ? undefined : { id: active.id, title: active.title ?? '', url: active.url ?? '' })
     }

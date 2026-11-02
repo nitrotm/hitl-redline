@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isExtensionOrigin } from '../src/protocol.ts'
+import { isExtensionOrigin, isUnder } from '../src/protocol.ts'
 
 describe('isExtensionOrigin', () => {
   it('takes the origins of Firefox and Chrome extensions', () => {
@@ -13,5 +13,19 @@ describe('isExtensionOrigin', () => {
     expect(isExtensionOrigin('null')).toBe(false)
     expect(isExtensionOrigin('moz-extension://abc.evil.example')).toBe(false)
     expect(isExtensionOrigin('moz-extension://abc/path')).toBe(false)
+  })
+})
+
+describe('isUnder', () => {
+  it('takes the preview and the pages under it', () => {
+    expect(isUnder('http://localhost:5173/', 'http://localhost:5173/')).toBe(true)
+    expect(isUnder('http://localhost:5173/settings?tab=2', 'http://localhost:5173/')).toBe(true)
+    expect(isUnder('http://localhost:5173/app/users', 'http://localhost:5173/app/index.html')).toBe(true)
+  })
+
+  it('refuses another origin or another path', () => {
+    expect(isUnder('http://localhost:5174/', 'http://localhost:5173/')).toBe(false)
+    expect(isUnder('http://localhost:5173/other', 'http://localhost:5173/app/')).toBe(false)
+    expect(isUnder('not a url', 'http://localhost:5173/')).toBe(false)
   })
 })

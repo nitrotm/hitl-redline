@@ -45,7 +45,7 @@ pkgs.stdenv.mkDerivation (finalAttrs: {
   offlineCache = yarn.fetchYarnBerryDeps {
     inherit (finalAttrs) src missingHashes;
     # after a change of yarn.lock: the hash nix says it got
-    hash = lib.fakeHash;
+    hash = "sha256-9uj7/pd2kpIVXainMyvrJ+qTObQxwq9Ij0APmh+sXCU=";
   };
 
   nativeBuildInputs = [

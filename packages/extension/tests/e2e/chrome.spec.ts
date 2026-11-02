@@ -75,6 +75,14 @@ test('screenshot, draw, comment and send a round', async () => {
   expect(await popover.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 'Make the button bigger'.length])
   await page.keyboard.press('Escape')
 
+  // a double click on #2's badge does the same, the pen now the tool
+  await page.keyboard.press('4')
+  const badge = (await page.locator('redline-overlay text', { hasText: '#2' }).boundingBox())!
+  await page.mouse.dblclick(badge.x + badge.width / 2, badge.y + badge.height / 2)
+  await expect(popover).toBeFocused()
+  await expect(popover).toHaveValue('Too much empty space here')
+  await page.keyboard.press('Escape')
+
   // the sidebar, opened in a tab of its own, has both, with their comments
   const sidebar = await context.newPage()
   await sidebar.goto(`chrome-extension://${extensionId}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)

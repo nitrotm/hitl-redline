@@ -275,16 +275,15 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   })
 
   // A double click edits a mark's comment, whatever the tool: the mark under the pointer, or,
-  // marks not taking the pointer while a drawing tool is on, the last drawn whose box is there (a
-  // double click draws nothing: too small).
+  // marks not taking the pointer while a drawing tool is on, the last drawn whose box, or badge,
+  // is there (a double click draws nothing: too small).
   svg.addEventListener('dblclick', (e) => {
     if (!snapshot) return
     const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
     const p = page(e)
-    const near = (a: Annotation) => {
-      const box = boundingBox(a)
-      return p.x >= box.x - HIT && p.x <= box.x + box.width + HIT && p.y >= box.y - HIT && p.y <= box.y + box.height + HIT
-    }
+    const within = (box: { x: number; y: number; width: number; height: number }) =>
+      p.x >= box.x - HIT && p.x <= box.x + box.width + HIT && p.y >= box.y - HIT && p.y <= box.y + box.height + HIT
+    const near = (a: Annotation) => within(boundingBox(a)) || within(badgeFor(a))
     const annotation = shape ? snapshot.annotations.find((a) => a.id === Number(shape.dataset.id)) : snapshot.annotations.findLast(near)
     if (annotation) openPopover(annotation, true)
   })

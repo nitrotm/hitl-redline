@@ -54,7 +54,7 @@ and the Redline toolbar shows up on the page.
 
 A screenshot comes first: <kbd>Ctrl</kbd>+<kbd>S</kbd>, or the toolbar's **Screenshot**. It covers the page,
 frozen, and you draw on it. Each mark opens a comment box at once: type, <kbd>Enter</kbd>
-saves. Double-click a mark, whatever the tool, to edit its comment again: all of it selected, to type over it.
+saves. Double-click a mark or its number, whatever the tool, to edit its comment again: all of it selected, to type over it.
 
 | Key                                                 | Tool                                                  |
 | --------------------------------------------------- | ----------------------------------------------------- |

@@ -7,11 +7,11 @@ bracketSpacing: true
 bracketSameLine: true
 arrowParens: always
 importOrder:
-  - "<THIRD_PARTY_MODULES>"
-  - "^@redline/(.*)$"
-  - "^[./]"
-  - "^[../]"
+  - '<THIRD_PARTY_MODULES>'
+  - '^@redline/(.*)$'
+  - '^[./]'
+  - '^[../]'
 importOrderSeparation: true
 importOrderSortSpecifiers: true
 plugins:
-  - "@trivago/prettier-plugin-sort-imports"
+  - '@trivago/prettier-plugin-sort-imports'

@@ -1,7 +1,7 @@
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import type { Annotation, FeedbackRound, Snapshot, SnapshotWithImages } from '@redline/shared'
+import { type Annotation, type FeedbackRound, type Snapshot, type SnapshotWithImages, boundingBox } from '@redline/shared'
 
 // A round on disk, in .redline/rounds/NNN/: feedback.md for Claude (and a human) to read first,
 // feedback.json with all of it, and the screenshots of each snapshot, S1.annotated.png and
@@ -109,15 +109,6 @@ function renderAnnotation(annotation: Annotation, snapshot: Snapshot): string {
   const target = annotation.target ? ` on \`${annotation.target.selector}\`${annotation.target.text ? ` "${oneLine(annotation.target.text, 60)}"` : ''}` : ''
   const comment = annotation.comment.trim() ? `\n\n${quote(annotation.comment, '  ')}` : ' (no comment)'
   return `- **#${annotation.id}** ${where}${target}${comment}`
-}
-
-export function boundingBox(annotation: Annotation): { x: number; y: number; width: number; height: number } {
-  if (annotation.kind === 'rect') return annotation.rect
-  const xs = annotation.points.map((p) => p.x)
-  const ys = annotation.points.map((p) => p.y)
-  const x = Math.min(...xs)
-  const y = Math.min(...ys)
-  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
 
 function quote(text: string, indent = ''): string {

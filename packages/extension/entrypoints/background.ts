@@ -53,12 +53,12 @@ export default defineBackground(() => {
 
   // A reload or a navigation loses the overlay (Claude reloads the page after each round). A page
   // of the preview that `redline wait --url` names starts a session by itself, unless the tab has
-  // one already, even stopped.
+  // one already, even stopped; a finished one (Done) does not count.
   browser.tabs.onUpdated.addListener(async (tabId, change, tab) => {
     if (change.status !== 'complete') return
     const session = await getSession(tabId)
     if (session?.active) await inject(tabId).catch(() => undefined)
-    else if (!session && tab.url && /^https?:/.test(tab.url)) {
+    else if ((!session || (session.lastSent?.status === 'done' && !session.pending)) && tab.url && /^https?:/.test(tab.url)) {
       const status = await bridgeStatus()
       if (status?.url && isUnder(tab.url, status.url)) await start(tabId).catch(() => undefined)
     }

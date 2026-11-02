@@ -1,0 +1,17 @@
+printWidth: 160
+tabWidth: 2
+semi: false
+singleQuote: true
+trailingComma: es5
+bracketSpacing: true
+bracketSameLine: true
+arrowParens: always
+importOrder:
+  - "<THIRD_PARTY_MODULES>"
+  - "^@redline/(.*)$"
+  - "^[./]"
+  - "^[../]"
+importOrderSeparation: true
+importOrderSortSpecifiers: true
+plugins:
+  - "@trivago/prettier-plugin-sort-imports"

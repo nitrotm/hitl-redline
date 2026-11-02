@@ -1,0 +1,17 @@
+.direnv/
+.env
+result
+result-*
+
+node_modules/
+.yarn/*
+!.yarn/patches
+dist/
+.output/
+.wxt/
+web-ext-artifacts/
+test-results/
+playwright-report/
+
+# what `redline wait` writes when run in this repository
+.redline/

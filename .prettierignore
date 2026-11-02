@@ -1,0 +1,7 @@
+.yarn/
+.output/
+.wxt/
+dist/
+flake.lock
+yarn.lock
+nix/missing-hashes.json

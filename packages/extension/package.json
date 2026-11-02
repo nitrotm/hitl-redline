@@ -1,0 +1,29 @@
+{
+  "name": "@redline/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt -b firefox",
+    "dev:chrome": "wxt",
+    "build": "wxt build -b firefox && wxt build",
+    "typecheck": "wxt prepare && run -T tsc -p .",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@redline/shared": "workspace:^",
+    "perfect-freehand": "^1.2.3",
+    "preact": "^11.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^24",
+    "@types/pngjs": "^6.0.5",
+    "@types/selenium-webdriver": "^4.35.7",
+    "happy-dom": "^21.0.4",
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0",
+    "selenium-webdriver": "^4.52.0",
+    "wxt": "^0.21.5"
+  }
+}

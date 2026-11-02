@@ -1,0 +1,134 @@
+import { mkdir, readdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
+import type { Annotation, FeedbackRound, Snapshot, SnapshotWithImages } from '@redline/shared'
+
+// A round on disk, in .redline/rounds/NNN/: feedback.md for Claude (and a human) to read first,
+// feedback.json with all of it, and the screenshots of each snapshot, S1.annotated.png and
+// S1.clean.png. NNN counts the rounds of the project, whatever their session.
+
+export interface WrittenRound {
+  directory: string
+  feedback: string
+  annotations: number
+}
+
+export async function writeRound(root: string, round: FeedbackRound): Promise<WrittenRound> {
+  const rounds = join(root, 'rounds')
+  await mkdir(rounds, { recursive: true })
+  const directory = await nextRoundDirectory(rounds)
+
+  const json: FeedbackRound = { ...round, snapshots: round.snapshots.map((s) => ({ ...s, images: imageFiles(s) })) }
+  await Promise.all([
+    ...round.snapshots.flatMap((s) => [
+      writeFile(join(directory, imageFiles(s).clean), decodePng(s.images.clean)),
+      writeFile(join(directory, imageFiles(s).annotated), decodePng(s.images.annotated)),
+    ]),
+    writeFile(join(directory, 'feedback.json'), JSON.stringify(json, null, 2) + '\n'),
+    writeFile(join(directory, 'feedback.md'), renderFeedback(round)),
+  ])
+
+  return {
+    directory,
+    feedback: join(directory, 'feedback.md'),
+    annotations: round.snapshots.reduce((n, s) => n + s.annotations.length, 0),
+  }
+}
+
+// the first free NNN after the highest one there; mkdir fails rather than share a directory
+async function nextRoundDirectory(rounds: string): Promise<string> {
+  const taken = (await readdir(rounds)).map((name) => Number.parseInt(name, 10)).filter(Number.isFinite)
+  for (let n = Math.max(0, ...taken) + 1; ; n++) {
+    const directory = join(rounds, String(n).padStart(3, '0'))
+    try {
+      await mkdir(directory)
+      return directory
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+  }
+}
+
+function imageFiles(snapshot: Pick<Snapshot, 'id'>) {
+  return { clean: `${snapshot.id}.clean.png`, annotated: `${snapshot.id}.annotated.png` }
+}
+
+function decodePng(dataUrl: string): Buffer {
+  return Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64')
+}
+
+export function renderFeedback(round: FeedbackRound): string {
+  const lines: string[] = []
+  lines.push(`# Redline feedback: round ${round.round}`, '')
+  lines.push(`- Session: \`${round.sessionId}\``)
+  lines.push(
+    round.status === 'done'
+      ? '- Status: **done**. The user is finished: apply this last feedback, if any, and stop waiting for rounds.'
+      : '- Status: **feedback**. Apply it, reload the page, and wait for the next round.'
+  )
+  lines.push(`- Snapshots: ${round.snapshots.length}, annotations: ${round.snapshots.reduce((n, s) => n + s.annotations.length, 0)}`)
+  lines.push('')
+  if (round.comment.trim()) lines.push('## General comment', '', quote(round.comment), '')
+
+  for (const snapshot of round.snapshots) lines.push(...renderSnapshot(snapshot))
+
+  if (round.snapshots.length > 0) {
+    lines.push(
+      '---',
+      '',
+      'Coordinates are CSS pixels of the screenshot, from its top left corner; a screenshot pixel is `dpr` times smaller.',
+      "Each `#id` is drawn next to its mark on the annotated screenshot, and is the same mark in every snapshot of the session. The selector is the element under the mark's center.",
+      ''
+    )
+  }
+  return lines.join('\n')
+}
+
+function renderSnapshot(snapshot: SnapshotWithImages | Snapshot): string[] {
+  const { viewport: v } = snapshot
+  const files = imageFiles(snapshot)
+  const lines = [
+    `## ${snapshot.id}: ${snapshot.title || '(untitled)'}`,
+    '',
+    `- URL: ${snapshot.url}`,
+    `- Screenshot: \`${files.annotated}\` (without the annotations: \`${files.clean}\`)`,
+    `- Viewport: ${v.width}×${v.height} CSS px, dpr ${v.dpr}, scrolled to (${Math.round(v.scrollX)}, ${Math.round(v.scrollY)})`,
+    '',
+  ]
+  if (snapshot.annotations.length === 0) lines.push('No annotations.', '')
+  for (const annotation of snapshot.annotations) lines.push(renderAnnotation(annotation, snapshot), '')
+  return lines
+}
+
+function renderAnnotation(annotation: Annotation, snapshot: Snapshot): string {
+  const box = boundingBox(annotation)
+  const x = Math.round(box.x - snapshot.viewport.scrollX)
+  const y = Math.round(box.y - snapshot.viewport.scrollY)
+  const shape = annotation.kind === 'rect' ? 'rectangle' : 'freehand mark'
+  const where = `${shape} at (${x}, ${y}), ${Math.round(box.width)}×${Math.round(box.height)}`
+  const target = annotation.target ? ` on \`${annotation.target.selector}\`${annotation.target.text ? ` "${oneLine(annotation.target.text, 60)}"` : ''}` : ''
+  const comment = annotation.comment.trim() ? `\n\n${quote(annotation.comment, '  ')}` : ' (no comment)'
+  return `- **#${annotation.id}** ${where}${target}${comment}`
+}
+
+export function boundingBox(annotation: Annotation): { x: number; y: number; width: number; height: number } {
+  if (annotation.kind === 'rect') return annotation.rect
+  const xs = annotation.points.map((p) => p.x)
+  const ys = annotation.points.map((p) => p.y)
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+}
+
+function quote(text: string, indent = ''): string {
+  return text
+    .trim()
+    .split('\n')
+    .map((line) => `${indent}> ${line}`.trimEnd())
+    .join('\n')
+}
+
+function oneLine(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
+}

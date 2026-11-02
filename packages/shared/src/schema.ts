@@ -1,0 +1,85 @@
+import { z } from 'zod'
+
+// The contract between the extension and the bridge: what a round of feedback holds. A change
+// here changes the bridge's writer (packages/bridge/src/writer.ts) and its tests with it.
+
+export const SCHEMA_VERSION = 1
+
+export const Point = z.object({ x: z.number(), y: z.number() })
+export type Point = z.infer<typeof Point>
+
+export const Rect = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number().nonnegative(),
+  height: z.number().nonnegative(),
+})
+export type Rect = z.infer<typeof Rect>
+
+// the element under an annotation, for Claude to find it in the sources
+export const Target = z.object({
+  selector: z.string(),
+  tag: z.string(),
+  text: z.string(),
+})
+export type Target = z.infer<typeof Target>
+
+// An annotation's id is unique in its session, and never reused: #7 is the same mark in every
+// snapshot and every round of the session. Its coordinates are the page's (CSS pixels from the
+// top left of the document), so it stays on its content when the page scrolls.
+const annotationBase = {
+  id: z.number().int().positive(),
+  color: z.string(),
+  comment: z.string(),
+  target: Target.optional(),
+}
+
+export const RectAnnotation = z.object({ ...annotationBase, kind: z.literal('rect'), rect: Rect })
+export const FreehandAnnotation = z.object({ ...annotationBase, kind: z.literal('freehand'), points: z.array(Point).min(2) })
+export const Annotation = z.discriminatedUnion('kind', [RectAnnotation, FreehandAnnotation])
+export type Annotation = z.infer<typeof Annotation>
+export type AnnotationKind = Annotation['kind']
+
+// the viewport when the snapshot was taken: its screenshot covers it, at dpr device pixels per CSS pixel
+export const Viewport = z.object({
+  width: z.number().positive(),
+  height: z.number().positive(),
+  dpr: z.number().positive(),
+  scrollX: z.number(),
+  scrollY: z.number(),
+})
+export type Viewport = z.infer<typeof Viewport>
+
+export const SnapshotId = z.string().regex(/^S\d+$/)
+
+export const Snapshot = z.object({
+  id: SnapshotId,
+  url: z.string(),
+  title: z.string(),
+  capturedAt: z.iso.datetime(),
+  viewport: Viewport,
+  annotations: z.array(Annotation),
+})
+export type Snapshot = z.infer<typeof Snapshot>
+
+const pngDataUrl = z.string().startsWith('data:image/png;base64,')
+
+// a snapshot as sent: with its screenshots, without and with the annotations drawn on it
+export const SnapshotWithImages = Snapshot.extend({
+  images: z.object({ clean: pngDataUrl, annotated: pngDataUrl }),
+})
+export type SnapshotWithImages = z.infer<typeof SnapshotWithImages>
+
+// 'done' ends the /redline loop: Claude stops waiting for another round
+export const RoundStatus = z.enum(['feedback', 'done'])
+export type RoundStatus = z.infer<typeof RoundStatus>
+
+export const FeedbackRound = z.object({
+  version: z.literal(SCHEMA_VERSION),
+  sessionId: z.string().min(1),
+  round: z.number().int().positive(),
+  status: RoundStatus,
+  comment: z.string(),
+  snapshots: z.array(SnapshotWithImages),
+})
+export type FeedbackRound = z.infer<typeof FeedbackRound>

@@ -47,7 +47,7 @@ test('screenshot, draw, comment and send a round', async () => {
   )
 
   // a screenshot first: the page freezes under it
-  await driver.actions().sendKeys('c').perform()
+  await driver.actions().keyDown(Key.CONTROL).sendKeys('s').keyUp(Key.CONTROL).perform()
   await driver.wait(async () => (await shadow.findElement(By.css('.frozen'))).isDisplayed(), 10_000)
 
   // a rectangle around the button, commented at once

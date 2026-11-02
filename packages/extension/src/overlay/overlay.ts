@@ -18,7 +18,9 @@ const SVG = 'http://www.w3.org/2000/svg'
 const MIN_SIZE = 4
 // an arrow shorter than this is a slip
 const MIN_ARROW = 12
-const TOOL_KEYS: Record<string, Tool> = { '1': 'select', '2': 'rect', '3': 'arrow', '4': 'freehand' }
+// by the keys' places (KeyboardEvent.code), whatever the layout: the tools on 1 to 4, the colors
+// on the row under them (COLOR_KEYS)
+const TOOL_KEYS: Record<string, Tool> = { Digit1: 'select', Digit2: 'rect', Digit3: 'arrow', Digit4: 'freehand' }
 const SAVE_MS = 300
 // the id of a mark drawn, until the background gives it its own
 const NEW = 0
@@ -53,7 +55,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     <div class="toolbar live">
       <span class="grip" title="Move the toolbar">${ICONS.grip}</span>
       <select class="device-select" title="Show the page as a device">${deviceOptions(initial.device)}</select>
-      <button data-action="capture" class="capture" title="Take a screenshot to annotate (C)">${ICONS.camera}<span class="label">Screenshot</span></button>
+      <button data-action="capture" class="capture" title="Take a screenshot to annotate (Ctrl+S)">${ICONS.camera}<span class="label">Screenshot</span></button>
       <span class="annotating">
         <span class="sep"></span>
         <button data-tool="select" title="Select and move (1)">${ICONS.select}</button>
@@ -61,7 +63,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
         <button data-tool="arrow" title="Arrow: from where it starts to what it points at (3)">${ICONS.arrow}</button>
         <button data-tool="freehand" title="Pen (4)">${ICONS.pen}</button>
         <span class="sep"></span>
-        ${COLORS.map((c, i) => `<button class="swatch" data-color="${c}" title="Color (${COLOR_KEYS[i]!.toUpperCase()})" style="--c:${c}"></button>`).join('')}
+        ${COLORS.map((c, i) => `<button class="swatch" data-color="${c}" title="Color (${COLOR_KEYS[i]!.slice(3)})" style="--c:${c}"></button>`).join('')}
         <span class="sep"></span>
         <button data-action="undo" title="Undo (Ctrl+Z)">${ICONS.undo}</button>
         <button data-action="delete" title="Delete the selected mark (Del)">${ICONS.trash}</button>
@@ -372,22 +374,28 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
 
   function capture() {
     if (editing !== null) closePopover(true)
-    void send({ type: 'snapshot/capture' }).then((r) => notify(`${r.snapshotId}: draw on the screenshot, then comment each mark`), report)
+    void send({ type: 'snapshot/capture' }).then((r) => notify(`${r.snapshotId}: draw on the screenshot, then comment each mark; Ctrl+S for another`), report)
   }
 
   function onKey(e: KeyboardEvent) {
+    if (e.altKey || e.metaKey) return
+    // a new screenshot, from wherever the focus is: Ctrl+S, the browser's Save Page otherwise, which
+    // yields to the page that takes it (S by its letter: a screenshot, on any layout)
+    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault()
+      e.stopPropagation()
+      return capture()
+    }
     const target = e.composedPath()[0] as HTMLElement | undefined
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
-    if (e.altKey || e.metaKey) return
     const key = e.key.toLowerCase()
-    const color = COLOR_KEYS.indexOf(key as (typeof COLOR_KEYS)[number])
+    const color = COLOR_KEYS.indexOf(e.code as (typeof COLOR_KEYS)[number])
     let handled = true
-    if (key === 'c' && !e.ctrlKey) capture()
-    else if (!snapshot) handled = false
+    if (!snapshot) handled = false
     else if (e.ctrlKey && key === 'z') act('undo')
     else if (e.ctrlKey) handled = false
-    else if (key in TOOL_KEYS) setTool(TOOL_KEYS[key]!)
-    else if (color >= 0) setColor(COLORS[color]!)
+    else if (e.code in TOOL_KEYS && !e.shiftKey) setTool(TOOL_KEYS[e.code]!)
+    else if (color >= 0 && !e.shiftKey) setColor(COLORS[color]!)
     else if (key === 'escape') setTool('select')
     else if ((key === 'delete' || key === 'backspace') && selected !== null) act('delete')
     else handled = false

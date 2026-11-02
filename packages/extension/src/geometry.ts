@@ -6,8 +6,9 @@ import { type Annotation, type Point, type Rect, boundingBox } from '@redline/sh
 // (canvas, src/capture): both draw the paths below, in page coordinates.
 
 export const COLORS = ['#e11d48', '#f59e0b', '#2563eb', '#16a34a'] as const
-// the keys of the colors, in order: the row under the tools' 1, 2, 3, 4
-export const COLOR_KEYS = ['q', 'w', 'e', 'r'] as const
+// the keys of the colors, in order, by their places (KeyboardEvent.code): the row under the tools'
+// 1, 2, 3, 4, Q W E R on a QWERTY keyboard
+export const COLOR_KEYS = ['KeyQ', 'KeyW', 'KeyE', 'KeyR'] as const
 export const RECT_STROKE = 3
 export const FREEHAND_SIZE = 6
 export const ARROW_SHAFT = 4

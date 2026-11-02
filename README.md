@@ -52,13 +52,13 @@ its profile as a temporary add-on, each time.
 In a project, run `/redline` (or `/redline http://localhost:5173/`). Claude opens the preview,
 and the Redline toolbar shows up on the page.
 
-A screenshot comes first: <kbd>C</kbd>, or the toolbar's **Screenshot**. It covers the page,
+A screenshot comes first: <kbd>Ctrl</kbd>+<kbd>S</kbd>, or the toolbar's **Screenshot**. It covers the page,
 frozen, and you draw on it. Each mark opens a comment box at once: type, <kbd>Enter</kbd>
 saves. Double-click a mark to edit its comment again.
 
 | Key                                                 | Tool                                                  |
 | --------------------------------------------------- | ----------------------------------------------------- |
-| <kbd>C</kbd>                                        | Take a screenshot (of the live page)                  |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd>                        | Take a screenshot (of the live page)                  |
 | <kbd>1</kbd>                                        | Select: move a mark, or select it                     |
 | <kbd>2</kbd>                                        | Rectangle                                             |
 | <kbd>3</kbd>                                        | Arrow: press where it starts, release where it points |
@@ -67,6 +67,10 @@ saves. Double-click a mark to edit its comment again.
 | <kbd>Del</kbd>                                      | Delete the selected mark                              |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                    |
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                     |
+
+The tools and colors go by their places on the keyboard, not their letters: the colors are the
+row under the digits whatever the layout (A Z E R on AZERTY). While Redline is on,
+<kbd>Ctrl</kbd>+<kbd>S</kbd> is its screenshot, not the browser's Save Page.
 
 The toolbar's ✕ leaves the screenshot, back to the live page; its grip moves it out of the way.
 

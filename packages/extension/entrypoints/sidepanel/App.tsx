@@ -58,7 +58,7 @@ function Help() {
   return (
     <div class="help">
       <p>
-        <kbd>C</kbd> takes a screenshot of the page. Draw on it, then comment each mark as it is drawn.
+        <kbd>Ctrl</kbd>+<kbd>S</kbd> takes a screenshot of the page. Draw on it, then comment each mark as it is drawn.
       </p>
       <p>
         <kbd>1</kbd> select and move · <kbd>2</kbd> rectangle · <kbd>3</kbd> arrow · <kbd>4</kbd> pen
@@ -116,7 +116,11 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
     <div class="session">
       <div class="capture capture-row">
         <DevicePicker tabId={tabId} session={session} ask={ask} disabled={locked} />
-        <button class="primary" disabled={locked} onClick={() => ask({ type: 'snapshot/capture', tabId })} title="A screenshot of the page, to annotate (C)">
+        <button
+          class="primary"
+          disabled={locked}
+          onClick={() => ask({ type: 'snapshot/capture', tabId })}
+          title="A screenshot of the page, to annotate (Ctrl+S)">
           Take a screenshot
         </button>
       </div>

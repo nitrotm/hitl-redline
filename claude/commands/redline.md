@@ -38,7 +38,7 @@ Then:
    temporary add-ons, and installing again is harmless.
 2. Open the preview with `new_page`, or `navigate_page` if a tab already shows it. The Redline
    toolbar shows up on the page.
-3. Tell the user, in two lines: take a screenshot (C), draw on it and comment each mark, then
+3. Tell the user, in two lines: take a screenshot (Ctrl+S), draw on it and comment each mark, then
    **Send to Claude** from the sidebar (the Redline toolbar button), or **Done** to finish.
 4. End your turn. Do not poll, do not sleep: the background task's exit wakes you.
 

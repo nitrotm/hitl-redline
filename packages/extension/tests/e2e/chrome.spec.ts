@@ -42,7 +42,7 @@ test('screenshot, draw, comment and send a round', async () => {
   const button = (await page.locator('button.cta').first().boundingBox())!
 
   // a screenshot first: the page freezes under it
-  await page.keyboard.press('c')
+  await page.keyboard.press('Control+s')
   await expect(page.locator('redline-overlay .frozen')).toBeVisible()
 
   // a rectangle around the button, commented at once

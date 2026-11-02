@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { Builder, By, type WebDriver, until } from 'selenium-webdriver'
+import { Builder, By, Key, type WebDriver, until } from 'selenium-webdriver'
 import firefox from 'selenium-webdriver/firefox.js'
 
 import { type Bridge, EXTENSION, expectRound, serveFixtures, startBridge } from './helpers.ts'
@@ -34,7 +34,7 @@ test.afterAll(async () => {
   bridge?.process.kill()
 })
 
-test('draw, comment, capture and send a round', async () => {
+test('screenshot, draw, comment and send a round', async () => {
   bridge = await startBridge(fixtures.url)
   await driver.get(fixtures.url)
 
@@ -42,11 +42,15 @@ test('draw, comment, capture and send a round', async () => {
   const overlay = await driver.wait(until.elementLocated(By.css('redline-overlay')), 10_000)
   const shadow = await overlay.getShadowRoot()
   await driver.wait(async () => (await shadow.findElements(By.css('.toolbar'))).length > 0, 10_000)
-
-  // a rectangle around the button, then a freehand mark
   const rect = await driver.executeScript<{ x: number; y: number; width: number; height: number }>(
     'return document.querySelector("button.cta").getBoundingClientRect().toJSON()'
   )
+
+  // a screenshot first: the page freezes under it
+  await driver.actions().sendKeys('c').perform()
+  await driver.wait(async () => (await shadow.findElement(By.css('.frozen'))).isDisplayed(), 10_000)
+
+  // a rectangle around the button, commented at once
   const at = (x: number, y: number) => ({ x: Math.round(x), y: Math.round(y), origin: 'viewport' as const })
   await driver
     .actions()
@@ -56,33 +60,34 @@ test('draw, comment, capture and send a round', async () => {
     .move({ ...at(rect.x + rect.width + 8, rect.y + rect.height + 8), duration: 100 })
     .release()
     .perform()
-  await driver.wait(async () => (await shadow.findElements(By.css('[data-id="1"]'))).length > 0, 5_000)
+  const popover = await shadow.findElement(By.css('.popover'))
+  await driver.wait(() => popover.isDisplayed(), 5_000)
+  await driver.actions().sendKeys('Make the button bigger', Key.ENTER).perform()
+  await driver.wait(async () => !(await popover.isDisplayed()), 5_000)
 
-  await driver.actions().sendKeys('p').perform()
-  let stroke = driver.actions().move(at(400, 260)).press()
-  for (const [x, y] of [
-    [440, 240],
-    [480, 270],
-    [520, 250],
-    [560, 280],
-  ] as const)
-    stroke = stroke.move({ ...at(x, y), duration: 50 })
-  await stroke.release().perform()
+  // an arrow, from the empty space to the heading
+  await driver.actions().sendKeys('3').perform()
+  await driver
+    .actions()
+    .move(at(600, 420))
+    .press()
+    .move({ ...at(450, 340), duration: 100 })
+    .move({ ...at(300, 260), duration: 100 })
+    .release()
+    .perform()
+  await driver.wait(() => popover.isDisplayed(), 5_000)
+  await driver.actions().sendKeys('Too much empty space here', Key.ENTER).perform()
   await driver.wait(async () => (await shadow.findElements(By.css('[data-id="2"]'))).length > 0, 5_000)
 
-  // comments, in the sidebar opened in a tab of its own
+  // the sidebar, opened in a tab of its own, has both, with their comments
   await driver.switchTo().newWindow('tab')
   await driver.get(`moz-extension://${UUID}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)
   await driver.wait(async () => (await driver.findElements(By.css('.marks textarea'))).length === 2, 10_000)
-  const comments = await driver.findElements(By.css('.marks textarea'))
-  await comments[0]!.sendKeys('Make the button bigger')
-  await comments[1]!.sendKeys('Too much empty space here')
   const general = await driver.findElement(By.css('footer textarea'))
   await general.sendKeys('Round 1, overall')
-  await driver.findElement(By.css('h1')).click()
+  await driver.findElement(By.css('.status')).click()
 
-  // no capture: Send captures the marks still on the page (Chrome's test captures with C)
-  await driver.findElement(By.xpath('//button[normalize-space()="Send to Claude"]')).click()
+  await driver.findElement(By.xpath('//button[starts-with(normalize-space(), "Send to Claude")]')).click()
   await expectRound(bridge, expect)
   await driver.wait(until.elementLocated(By.css('.note.sent')), 5_000)
 })

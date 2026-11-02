@@ -1,42 +1,49 @@
 import type { Annotation, RoundStatus, Target, Viewport } from '@redline/shared'
 
-import type { Session, Tool } from './state/session.ts'
+import type { Tool } from './state/session.ts'
 
 // What the overlay and the sidebar ask the background, which owns the sessions (src/state). A
 // request without tabId is for the tab of its sender: the overlay's.
 
 export type NewAnnotation = Annotation extends infer A ? (A extends Annotation ? Omit<A, 'id' | 'comment'> : never) : never
-export type AnnotationPatch = { comment?: string; target?: Target } & (
-  { rect?: Extract<Annotation, { kind: 'rect' }>['rect'] } | { points?: Extract<Annotation, { kind: 'freehand' }>['points'] }
+export type AnnotationPatch = { comment?: string; color?: string; target?: Target } & (
+  | { rect?: Extract<Annotation, { kind: 'rect' }>['rect'] }
+  | { from?: Extract<Annotation, { kind: 'arrow' }>['from']; to?: Extract<Annotation, { kind: 'arrow' }>['to'] }
+  | { points?: Extract<Annotation, { kind: 'freehand' }>['points'] }
 )
 
 export type Request =
-  | { type: 'session/start'; tabId?: number }
-  | { type: 'session/stop'; tabId?: number }
-  | { type: 'session/discard'; tabId?: number }
   | { type: 'ui/set'; tabId?: number; tool?: Tool; color?: string }
   | { type: 'annotation/add'; tabId?: number; annotation: NewAnnotation }
   | { type: 'annotation/update'; tabId?: number; id: number; patch: AnnotationPatch }
   | { type: 'annotation/delete'; tabId?: number; id: number }
+  // on the page or in the sidebar: both show it; the sidebar's opens its snapshot
+  | { type: 'annotation/select'; tabId?: number; id: number | null }
   | { type: 'annotation/undo'; tabId?: number }
+  // a screenshot of the page, a new snapshot to annotate; it starts the session if need be
   | { type: 'snapshot/capture'; tabId?: number }
+  | { type: 'snapshot/open'; tabId?: number; snapshotId: string }
+  | { type: 'snapshot/close'; tabId?: number }
   | { type: 'snapshot/delete'; tabId?: number; snapshotId: string }
+  // the screenshot of a snapshot, for the overlay, which cannot read the extension's IndexedDB
+  | { type: 'snapshot/image'; tabId?: number; snapshotId: string }
   | { type: 'comment/set'; tabId?: number; comment: string }
   | { type: 'round/submit'; tabId?: number; status: RoundStatus }
   | { type: 'outbox/flush' }
   | { type: 'whoami' }
 
 export interface Responses {
-  'session/start': Session
-  'session/stop': null
-  'session/discard': null
   'ui/set': null
   'annotation/add': Annotation
   'annotation/update': null
   'annotation/delete': null
+  'annotation/select': null
   'annotation/undo': null
   'snapshot/capture': CaptureResult
+  'snapshot/open': null
+  'snapshot/close': null
   'snapshot/delete': null
+  'snapshot/image': string
   'comment/set': null
   'round/submit': null
   'outbox/flush': null
@@ -46,9 +53,6 @@ export interface Responses {
 
 export interface CaptureResult {
   snapshotId: string
-  captured: number
-  // the drafts outside the viewport, left on the page for another snapshot
-  left: number
 }
 
 // What the background asks the overlay of a tab.
@@ -63,8 +67,8 @@ export interface PreparedCapture {
 // the background answers { ok, value } or { ok: false, error }, which send() turns back into a throw
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string }
 
-export async function send<R extends Request>(request: R): Promise<Responses[R['type']]> {
-  const reply = (await browser.runtime.sendMessage(request)) as Reply<Responses[R['type']]> | undefined
+export async function send<T extends Request['type']>(request: Extract<Request, { type: T }>): Promise<Responses[T]> {
+  const reply = (await browser.runtime.sendMessage(request)) as Reply<Responses[T]> | undefined
   if (!reply) throw new Error(`no answer to ${request.type}`)
   if (!reply.ok) throw new Error(reply.error)
   return reply.value

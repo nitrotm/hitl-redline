@@ -6,9 +6,9 @@ allowed-tools: Bash(redline:*)
 
 # /redline: a review loop with the Redline extension
 
-The user reviews the page you are developing in Firefox. They draw rectangles and freehand marks
-on it with the Redline extension, comment on each mark (`#1`, `#2`…), capture snapshots, and
-send the round to you. You apply it, reload the page, and wait for the next round. Repeat until
+The user reviews the page you are developing in Firefox, with the Redline extension. They take
+screenshots of it, draw rectangles, arrows and freehand marks on them, comment on each mark
+(`#1`, `#2`…), and send the round to you. You apply it, reload the page, and wait for the next round. Repeat until
 they click **Done**.
 
 The browser is the one of the **firefox-devtools** MCP server: use its tools (`install_extension`,
@@ -38,8 +38,8 @@ Then:
    temporary add-ons, and installing again is harmless.
 2. Open the preview with `new_page`, or `navigate_page` if a tab already shows it. The Redline
    toolbar shows up on the page.
-3. Tell the user, in two lines: annotate the page, open the sidebar with the Redline toolbar
-   button to comment each mark, then **Send to Claude** (or **Done** to finish).
+3. Tell the user, in two lines: take a screenshot (C), draw on it and comment each mark, then
+   **Send to Claude** from the sidebar (the Redline toolbar button), or **Done** to finish.
 4. End your turn. Do not poll, do not sleep: the background task's exit wakes you.
 
 Make sure `.redline/` is in the project's `.gitignore`. Add it if not, and say so.
@@ -62,8 +62,7 @@ Then:
 2. If the status is **done**, apply what the round holds (it may be empty), summarize the session,
    and stop: no new `redline wait`.
 3. Otherwise start `redline wait --url <preview URL>` in the background again, **then** reload
-   the page with `navigate_page` (same URL) so the user sees the changes. Their marks still on
-   the page come back. Wait for the dev server's rebuild first if it has one.
+   the page with `navigate_page` (same URL) so the user sees the changes. Wait for the dev server's rebuild first if it has one.
 4. Reply briefly, one line per mark: `#3: padding 8 → 16px in Button.tsx`. Then end your turn
    and wait again.
 

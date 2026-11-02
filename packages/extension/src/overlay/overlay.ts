@@ -1,23 +1,36 @@
-import type { Annotation, Point } from '@redline/shared'
+import type { Annotation, Point, Snapshot } from '@redline/shared'
 
-import { COLORS, badgeFor, boundingBox, center, freehandPath, rectFromCorners, translate } from '../geometry.ts'
+import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, freehandPath, rectFromCorners, translate } from '../geometry.ts'
 import { type ContentRequest, type NewAnnotation, type PreparedCapture, send } from '../messages.ts'
-import type { Session, Tool } from '../state/session.ts'
+import { type Session, type Tool, currentSnapshot } from '../state/session.ts'
 import { targetAt } from '../target-hint.ts'
 import { OVERLAY_CSS } from './style.ts'
 
-// The marks on the page: an SVG the size of the viewport, over everything, in a shadow
-// root that the page's styles cannot reach. Its shapes are in page coordinates, moved by the
-// scroll, so a mark stays on what it marks. What it draws is the session's drafts; what is drawn
-// goes to the background, and comes back through storage.
+// The overlay, in a shadow root that the page's styles cannot reach. On the live page, it is a
+// toolbar whose first button takes a screenshot. Once taken, the screenshot covers the page,
+// frozen, and the marks go on it: an SVG whose coordinates are the screenshot's, moved by its
+// scroll, so a mark is stored in page coordinates. What is drawn goes to the background, and
+// comes back through storage.
 
 const SVG = 'http://www.w3.org/2000/svg'
 const MIN_SIZE = 4
+// an arrow shorter than this is a slip
+const MIN_ARROW = 12
+const TOOL_KEYS: Record<string, Tool> = { '1': 'select', '2': 'rect', '3': 'arrow', '4': 'freehand' }
+const SAVE_MS = 300
 
 export interface Overlay {
   render(session: Session): void
   handle(request: ContentRequest): Promise<unknown> | undefined
   destroy(): void
+}
+
+export function viewportOf(win: Window): PreparedCapture {
+  return {
+    viewport: { width: win.innerWidth, height: win.innerHeight, dpr: win.devicePixelRatio, scrollX: win.scrollX, scrollY: win.scrollY },
+    url: win.location.href,
+    title: win.document.title,
+  }
 }
 
 export function mountOverlay(doc: Document, initial: Session): Overlay {
@@ -26,57 +39,116 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   // open, for the end-to-end tests to reach the toolbar; the page's styles stop at its edge all the same
   const root = host.attachShadow({ mode: 'open' })
   root.innerHTML = `<style>${OVERLAY_CSS}</style>
-    <svg class="canvas" xmlns="${SVG}"><g class="world"><g class="shapes"></g><g class="preview"></g></g></svg>
-    <div class="toolbar" part="toolbar">
-      <button data-tool="select" title="Select and move (V)">${ICONS.select}</button>
-      <button data-tool="rect" title="Rectangle (R)">${ICONS.rect}</button>
-      <button data-tool="freehand" title="Pen (P)">${ICONS.pen}</button>
-      <span class="sep"></span>
-      ${COLORS.map((c) => `<button class="swatch" data-color="${c}" title="Color" style="--c:${c}"></button>`).join('')}
-      <span class="sep"></span>
-      <button data-action="undo" title="Undo (Ctrl+Z)">${ICONS.undo}</button>
-      <button data-action="delete" title="Delete the selected mark (Del)">${ICONS.trash}</button>
-      <button data-action="capture" title="Capture a snapshot (C)">${ICONS.camera}</button>
-      <span class="sep"></span>
-      <button data-action="stop" title="Hide Redline (Alt+Shift+R)">${ICONS.close}</button>
+    <div class="frozen" hidden>
+      <svg class="canvas" xmlns="${SVG}" preserveAspectRatio="xMinYMin meet">
+        <image class="screenshot" preserveAspectRatio="none"></image>
+        <g class="world"><g class="shapes"></g><g class="preview"></g></g>
+      </svg>
+    </div>
+    <div class="toolbar live">
+      <span class="grip" title="Move the toolbar">${ICONS.grip}</span>
+      <button data-action="capture" class="capture" title="Take a screenshot to annotate (C)">${ICONS.camera}<span class="label">Screenshot</span></button>
+      <span class="annotating">
+        <span class="sep"></span>
+        <button data-tool="select" title="Select and move (1)">${ICONS.select}</button>
+        <button data-tool="rect" title="Rectangle (2)">${ICONS.rect}</button>
+        <button data-tool="arrow" title="Arrow: from where it starts to what it points at (3)">${ICONS.arrow}</button>
+        <button data-tool="freehand" title="Pen (4)">${ICONS.pen}</button>
+        <span class="sep"></span>
+        ${COLORS.map((c, i) => `<button class="swatch" data-color="${c}" title="Color (${COLOR_KEYS[i]!.toUpperCase()})" style="--c:${c}"></button>`).join('')}
+        <span class="sep"></span>
+        <button data-action="undo" title="Undo (Ctrl+Z)">${ICONS.undo}</button>
+        <button data-action="delete" title="Delete the selected mark (Del)">${ICONS.trash}</button>
+        <span class="sep"></span>
+        <span class="snapshot-id"></span>
+        <button data-action="close" title="Back to the page">${ICONS.close}</button>
+      </span>
+    </div>
+    <div class="popover" hidden>
+      <span class="badge"></span>
+      <textarea rows="2" placeholder="What should change here? Enter to save, Esc to close"></textarea>
     </div>
     <div class="toast" hidden></div>`
   doc.documentElement.append(host)
 
-  const svg = root.querySelector('svg')!
+  const frozen = root.querySelector<HTMLDivElement>('.frozen')!
+  const svg = root.querySelector<SVGSVGElement>('svg')!
+  const image = root.querySelector<SVGImageElement>('.screenshot')!
   const world = root.querySelector<SVGGElement>('.world')!
   const shapes = root.querySelector<SVGGElement>('.shapes')!
   const preview = root.querySelector<SVGGElement>('.preview')!
   const toolbar = root.querySelector<HTMLDivElement>('.toolbar')!
+  const popover = root.querySelector<HTMLDivElement>('.popover')!
+  const comment = popover.querySelector('textarea')!
   const toast = root.querySelector<HTMLDivElement>('.toast')!
   const win = doc.defaultView!
 
   let session = initial
+  let snapshot: Snapshot | undefined
+  let shownImage: string | undefined
+  // the session's (session.selected), shared with the sidebar; set here at once, for the drag
   let selected: number | null = null
   let highlighted: number | null = null
   // the mark being drawn or moved, before it goes to the background
   let gesture:
     | { kind: 'rect'; from: Point; to: Point }
+    | { kind: 'arrow'; from: Point; to: Point }
     | { kind: 'freehand'; points: Point[] }
     | { kind: 'move'; id: number; from: Point; dx: number; dy: number }
     | null = null
+  // the mark whose comment the popover edits
+  let editing: number | null = null
 
-  const page = (e: PointerEvent): Point => ({ x: e.clientX + win.scrollX, y: e.clientY + win.scrollY })
+  // a pointer's position, in the page's coordinates of the snapshot: the screenshot's, scaled to
+  // the window, plus the scroll it was taken at
+  function page(e: PointerEvent | MouseEvent): Point {
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM()!.inverse())
+    return { x: p.x + snapshot!.viewport.scrollX, y: p.y + snapshot!.viewport.scrollY }
+  }
+
+  // the other way: where a point of the page is in the window, the screenshot shown
+  function client(p: Point): Point {
+    const q = new DOMPoint(p.x - snapshot!.viewport.scrollX, p.y - snapshot!.viewport.scrollY).matrixTransform(svg.getScreenCTM()!)
+    return { x: q.x, y: q.y }
+  }
 
   function render(next: Session) {
     session = next
-    if (selected !== null && !session.draft.some((a) => a.id === selected)) selected = null
-    svg.classList.toggle('drawing', session.tool !== 'select')
+    snapshot = currentSnapshot(session)
+    const marks = snapshot?.annotations ?? []
+    if (!gesture) selected = session.selected ?? null
+    if (editing !== null && !marks.some((a) => a.id === editing)) closePopover(false)
+
+    toolbar.classList.toggle('live', !snapshot)
+    frozen.hidden = !snapshot
+    if (snapshot) {
+      const { width, height, scrollX, scrollY } = snapshot.viewport
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+      image.setAttribute('width', String(width))
+      image.setAttribute('height', String(height))
+      world.setAttribute('transform', `translate(${-scrollX} ${-scrollY})`)
+      root.querySelector('.snapshot-id')!.textContent = snapshot.id
+      if (shownImage !== snapshot.id) loadImage(snapshot.id)
+    } else shownImage = undefined
+    svg.dataset.tool = session.tool
     for (const button of toolbar.querySelectorAll<HTMLButtonElement>('[data-tool]')) button.classList.toggle('on', button.dataset.tool === session.tool)
     for (const button of toolbar.querySelectorAll<HTMLButtonElement>('[data-color]')) button.classList.toggle('on', button.dataset.color === session.color)
     toolbar.querySelector<HTMLButtonElement>('[data-action="delete"]')!.disabled = selected === null
-    toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = session.draft.length === 0
+    toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = marks.length === 0
     drawShapes()
+  }
+
+  function loadImage(snapshotId: string) {
+    shownImage = snapshotId
+    image.removeAttribute('href')
+    send({ type: 'snapshot/image', snapshotId }).then((png) => {
+      if (shownImage === snapshotId) image.setAttribute('href', png)
+    }, report)
   }
 
   function drawShapes() {
     shapes.replaceChildren(
-      ...session.draft.map((annotation) => {
+      ...(snapshot?.annotations ?? []).map((annotation) => {
         const moved = gesture?.kind === 'move' && gesture.id === annotation.id ? translate(annotation, gesture.dx, gesture.dy) : annotation
         return shapeElement(moved, { selected: annotation.id === selected, highlighted: annotation.id === highlighted })
       })
@@ -88,39 +160,36 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     if (gesture?.kind === 'rect') {
       const r = rectFromCorners(gesture.from, gesture.to)
       preview.append(el('rect', { x: r.x, y: r.y, width: r.width, height: r.height, class: 'rect', stroke: session.color }))
+    } else if (gesture?.kind === 'arrow') {
+      preview.append(el('path', { d: arrowPath(gesture.from, gesture.to), class: 'stroke', fill: session.color }))
     } else if (gesture?.kind === 'freehand') {
       preview.append(el('path', { d: freehandPath(gesture.points), class: 'stroke', fill: session.color }))
     }
   }
 
-  function follow() {
-    world.setAttribute('transform', `translate(${-win.scrollX} ${-win.scrollY})`)
-  }
-
-  // drawing: on the SVG, which takes the pointer when a drawing tool is on
   svg.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || !snapshot) return
+    if (editing !== null) closePopover(true)
     const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
     if (session.tool === 'select') {
-      if (!shape) return
-      const id = Number(shape.dataset.id)
-      selected = id
-      gesture = { kind: 'move', id, from: page(e), dx: 0, dy: 0 }
-      render(session)
-    } else if (session.tool === 'rect') {
-      gesture = { kind: 'rect', from: page(e), to: page(e) }
+      selected = shape ? Number(shape.dataset.id) : null
+      if (selected !== null) gesture = { kind: 'move', id: selected, from: page(e), dx: 0, dy: 0 }
+      if (selected !== (session.selected ?? null)) void send({ type: 'annotation/select', id: selected }).catch(report)
+      drawShapes()
+      if (!gesture) return
+    } else if (session.tool === 'rect' || session.tool === 'arrow') {
+      gesture = session.tool === 'rect' ? { kind: 'rect', from: page(e), to: page(e) } : { kind: 'arrow', from: page(e), to: page(e) }
     } else {
       gesture = { kind: 'freehand', points: [page(e)] }
     }
     svg.setPointerCapture(e.pointerId)
     e.preventDefault()
-    e.stopPropagation()
   })
 
   svg.addEventListener('pointermove', (e) => {
     if (!gesture) return
     const p = page(e)
-    if (gesture.kind === 'rect') gesture.to = p
+    if (gesture.kind === 'rect' || gesture.kind === 'arrow') gesture.to = p
     else if (gesture.kind === 'freehand') {
       const last = gesture.points.at(-1)!
       if (Math.hypot(p.x - last.x, p.y - last.y) >= 2) gesture.points.push(p)
@@ -138,15 +207,16 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     gesture = null
     if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId)
     preview.replaceChildren()
-    if (!done) return
+    if (!done || !snapshot) return
 
     if (done.kind === 'move') {
-      const annotation = session.draft.find((a) => a.id === done.id)
+      const annotation = snapshot.annotations.find((a) => a.id === done.id)
       if (!annotation || Math.hypot(done.dx, done.dy) < 1) return drawShapes()
       const moved = translate(annotation, done.dx, done.dy)
-      const patch = moved.kind === 'rect' ? { rect: moved.rect } : { points: moved.points }
+      const patch = moved.kind === 'rect' ? { rect: moved.rect } : moved.kind === 'arrow' ? { from: moved.from, to: moved.to } : { points: moved.points }
       // until the background's answer comes back through storage, it stays where it was dropped
-      render({ ...session, draft: session.draft.map((a) => (a.id === done.id ? moved : a)) })
+      snapshot = { ...snapshot, annotations: snapshot.annotations.map((a) => (a.id === done.id ? moved : a)) }
+      drawShapes()
       void send({ type: 'annotation/update', id: done.id, patch: { ...patch, target: targetOf(moved) } }).catch(report)
       return
     }
@@ -156,6 +226,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       const rect = rectFromCorners(done.from, done.to)
       if (rect.width < MIN_SIZE || rect.height < MIN_SIZE) return
       annotation = { kind: 'rect', color: session.color, rect }
+    } else if (done.kind === 'arrow') {
+      if (Math.hypot(done.to.x - done.from.x, done.to.y - done.from.y) < MIN_ARROW) return
+      annotation = { kind: 'arrow', color: session.color, from: done.from, to: done.to }
     } else {
       if (done.points.length < 2) return
       annotation = { kind: 'freehand', color: session.color, points: done.points }
@@ -163,7 +236,8 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     const target = targetOf({ ...annotation, id: 0, comment: '' } as Annotation)
     // drawn at once, without its id until the background gives it one
     shapes.append(shapeElement({ ...annotation, id: 0, comment: '' } as Annotation, { selected: false, highlighted: false }))
-    void send({ type: 'annotation/add', annotation: target ? { ...annotation, target } : annotation }).catch(report)
+    // then its comment, at once
+    send({ type: 'annotation/add', annotation: target ? { ...annotation, target } : annotation }).then(openPopover, report)
   })
 
   svg.addEventListener('pointercancel', () => {
@@ -172,37 +246,103 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     drawShapes()
   })
 
-  // the element under the mark's center, the overlay out of the way
+  svg.addEventListener('dblclick', (e) => {
+    const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
+    const annotation = snapshot?.annotations.find((a) => a.id === Number(shape?.dataset.id))
+    if (annotation) openPopover(annotation)
+  })
+
+  // the screenshot does not scroll: the page under it must not either
+  frozen.addEventListener('wheel', (e) => e.preventDefault(), { passive: false })
+
+  // The element the mark points at (aim: an arrow's tip, the others' center), on the live page under
+  // the screenshot: the same, as long as the page has not changed since.
   function targetOf(annotation: Annotation) {
-    const c = center(boundingBox(annotation))
+    const c = aim(annotation)
     return targetAt(doc, c.x - win.scrollX, c.y - win.scrollY, host)
   }
+
+  // the comment of a mark, where it is, at once: Enter saves, Esc closes, Shift+Enter is a new line
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  function openPopover(annotation: Annotation) {
+    if (!snapshot) return
+    editing = annotation.id
+    const badge = popover.querySelector<HTMLSpanElement>('.badge')!
+    badge.textContent = `#${annotation.id}`
+    badge.style.background = annotation.color
+    comment.value = annotation.comment
+    popover.hidden = false
+    const box = boundingBox(annotation)
+    const below = client({ x: box.x, y: box.y + box.height })
+    const above = client({ x: box.x, y: box.y })
+    const height = popover.offsetHeight
+    const top = below.y + 8 + height < win.innerHeight ? below.y + 8 : Math.max(8, above.y - height - 8)
+    popover.style.left = `${Math.min(Math.max(8, below.x), win.innerWidth - popover.offsetWidth - 8)}px`
+    popover.style.top = `${top}px`
+    comment.focus()
+  }
+
+  function closePopover(save: boolean) {
+    clearTimeout(saveTimer)
+    if (save) saveComment()
+    editing = null
+    popover.hidden = true
+    // the keys go to the tools again
+    comment.blur()
+  }
+
+  function saveComment() {
+    const annotation = snapshot?.annotations.find((a) => a.id === editing)
+    if (editing !== null && comment.value !== annotation?.comment)
+      void send({ type: 'annotation/update', id: editing, patch: { comment: comment.value } }).catch(report)
+  }
+
+  comment.addEventListener('input', () => {
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(saveComment, SAVE_MS)
+  })
+  comment.addEventListener('keydown', (e) => {
+    // the page's shortcuts never see what is typed here
+    e.stopPropagation()
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Escape') {
+      e.preventDefault()
+      closePopover(true)
+    }
+  })
+  comment.addEventListener('blur', () => {
+    if (editing !== null) closePopover(true)
+  })
 
   toolbar.addEventListener('click', (e) => {
     const button = (e.target as Element).closest<HTMLButtonElement>('button')
     if (!button) return
     if (button.dataset.tool) setTool(button.dataset.tool as Tool)
-    else if (button.dataset.color) void send({ type: 'ui/set', color: button.dataset.color }).catch(report)
+    else if (button.dataset.color) setColor(button.dataset.color)
     else act(button.dataset.action)
   })
 
   function setTool(tool: Tool) {
-    void send({ type: 'ui/set', tool }).catch(report)
+    if (snapshot) void send({ type: 'ui/set', tool }).catch(report)
+  }
+
+  function setColor(color: string) {
+    if (!snapshot) return
+    void send({ type: 'ui/set', color }).catch(report)
+    // the selected mark takes it too
+    if (selected !== null) void send({ type: 'annotation/update', id: selected, patch: { color } }).catch(report)
   }
 
   function act(action: string | undefined) {
-    if (action === 'undo') void send({ type: 'annotation/undo' }).catch(report)
+    if (action === 'capture') capture()
+    else if (!snapshot) return
+    else if (action === 'undo') void send({ type: 'annotation/undo' }).catch(report)
     else if (action === 'delete' && selected !== null) void send({ type: 'annotation/delete', id: selected }).catch(report)
-    else if (action === 'capture') capture()
-    else if (action === 'stop') void send({ type: 'session/stop' }).catch(report)
+    else if (action === 'close') void send({ type: 'snapshot/close' }).catch(report)
   }
 
   function capture() {
-    void send({ type: 'snapshot/capture' }).then(
-      (r) =>
-        notify(`${r.snapshotId}: ${r.captured} mark${r.captured === 1 ? '' : 's'} captured${r.left ? `, ${r.left} outside the view left on the page` : ''}`),
-      report
-    )
+    if (editing !== null) closePopover(true)
+    void send({ type: 'snapshot/capture' }).then((r) => notify(`${r.snapshotId}: draw on the screenshot, then comment each mark`), report)
   }
 
   function onKey(e: KeyboardEvent) {
@@ -210,13 +350,15 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
     if (e.altKey || e.metaKey) return
     const key = e.key.toLowerCase()
+    const color = COLOR_KEYS.indexOf(key as (typeof COLOR_KEYS)[number])
     let handled = true
-    if ((e.ctrlKey && key === 'z') || (!e.ctrlKey && key === 'u')) act('undo')
+    if (key === 'c' && !e.ctrlKey) capture()
+    else if (!snapshot) handled = false
+    else if (e.ctrlKey && key === 'z') act('undo')
     else if (e.ctrlKey) handled = false
-    else if (key === 'escape' || key === 'v') setTool('select')
-    else if (key === 'r') setTool('rect')
-    else if (key === 'p') setTool('freehand')
-    else if (key === 'c') capture()
+    else if (key in TOOL_KEYS) setTool(TOOL_KEYS[key]!)
+    else if (color >= 0) setColor(COLORS[color]!)
+    else if (key === 'escape') setTool('select')
     else if ((key === 'delete' || key === 'backspace') && selected !== null) act('delete')
     else handled = false
     if (handled) {
@@ -225,21 +367,38 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     }
   }
 
-  let timer: ReturnType<typeof setTimeout> | undefined
+  // the toolbar moves by its grip, out of the way of what is to be marked
+  const grip = toolbar.querySelector<HTMLSpanElement>('.grip')!
+  grip.addEventListener('pointerdown', (e) => {
+    const start = { x: e.clientX, y: e.clientY, rect: toolbar.getBoundingClientRect() }
+    grip.setPointerCapture(e.pointerId)
+    const move = (m: PointerEvent) => {
+      toolbar.style.left = `${Math.min(Math.max(0, start.rect.left + m.clientX - start.x), win.innerWidth - start.rect.width)}px`
+      toolbar.style.top = `${Math.min(Math.max(0, start.rect.top + m.clientY - start.y), win.innerHeight - start.rect.height)}px`
+      toolbar.style.right = 'auto'
+    }
+    const up = () => {
+      grip.removeEventListener('pointermove', move)
+      grip.removeEventListener('pointerup', up)
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', up)
+    e.preventDefault()
+  })
+
+  let toastTimer: ReturnType<typeof setTimeout> | undefined
   function notify(message: string, error = false) {
     toast.textContent = message
     toast.classList.toggle('error', error)
     toast.hidden = false
-    clearTimeout(timer)
-    timer = setTimeout(() => (toast.hidden = true), error ? 6000 : 3000)
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => (toast.hidden = true), error ? 6000 : 3000)
   }
   function report(error: unknown) {
     notify(error instanceof Error ? error.message : String(error), true)
   }
 
-  win.addEventListener('scroll', follow, { passive: true })
   win.addEventListener('keydown', onKey, true)
-  follow()
   render(session)
 
   return {
@@ -249,43 +408,22 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
         case 'capture/prepare':
           host.style.visibility = 'hidden'
           // two frames: the one without the overlay is painted before the capture
-          return new Promise<PreparedCapture>((resolve) =>
-            win.requestAnimationFrame(() =>
-              win.requestAnimationFrame(() =>
-                resolve({
-                  viewport: { width: win.innerWidth, height: win.innerHeight, dpr: win.devicePixelRatio, scrollX: win.scrollX, scrollY: win.scrollY },
-                  url: doc.location.href,
-                  title: doc.title,
-                })
-              )
-            )
-          )
+          return new Promise<PreparedCapture>((resolve) => win.requestAnimationFrame(() => win.requestAnimationFrame(() => resolve(viewportOf(win)))))
         case 'capture/restore':
           host.style.visibility = ''
           return Promise.resolve(null)
         case 'highlight':
           highlighted = request.id
           drawShapes()
-          if (request.id !== null) scrollIntoView(request.id)
           return Promise.resolve(null)
         case 'ping':
           return Promise.resolve('pong')
       }
     },
     destroy() {
-      win.removeEventListener('scroll', follow)
       win.removeEventListener('keydown', onKey, true)
       host.remove()
     },
-  }
-
-  function scrollIntoView(id: number) {
-    const annotation = session.draft.find((a) => a.id === id)
-    if (!annotation) return
-    const box = boundingBox(annotation)
-    const inView =
-      box.y + box.height > win.scrollY && box.y < win.scrollY + win.innerHeight && box.x + box.width > win.scrollX && box.x < win.scrollX + win.innerWidth
-    if (!inView) win.scrollTo({ left: Math.max(0, box.x - 40), top: Math.max(0, box.y - win.innerHeight / 3), behavior: 'smooth' })
   }
 }
 
@@ -299,7 +437,7 @@ function shapeElement(annotation: Annotation, state: { selected: boolean; highli
       el('rect', { x, y, width, height, class: 'rect', stroke: annotation.color })
     )
   } else {
-    const d = freehandPath(annotation.points)
+    const d = fillPath(annotation)
     g.append(el('path', { d, class: 'hit' }), el('path', { d, class: 'stroke', fill: annotation.color }))
   }
   if (annotation.id > 0) {
@@ -323,11 +461,15 @@ function el<K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<str
 const icon = (body: string) =>
   `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
 const ICONS = {
+  grip: icon(
+    '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'
+  ),
+  camera: icon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
   select: icon('<path d="M5 3l14 8-6 2-3 6z"/>'),
   rect: icon('<rect x="4" y="5" width="16" height="14" rx="1"/>'),
+  arrow: icon('<path d="M5 19L19 5"/><path d="M10 5h9v9"/>'),
   pen: icon('<path d="M4 20c4-1 6-5 9-9s5-6 7-6"/><path d="M16 4l4 4"/>'),
   undo: icon('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>'),
   trash: icon('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
-  camera: icon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
   close: icon('<path d="M6 6l12 12M18 6L6 18"/>'),
 }

@@ -3,17 +3,20 @@ import { isUnder } from '@redline/shared'
 import { BridgeError, bridgeStatus, postRound } from '@/src/bridge-client.ts'
 import { composite } from '@/src/capture/composite.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Reply, Request, Responses } from '@/src/messages.ts'
-import { deleteImages, deleteSessionImages, getImages, putImages } from '@/src/state/images.ts'
+import { deleteImage, deleteSessionImages, getImage, putImage } from '@/src/state/images.ts'
 import {
   type Session,
   addAnnotation,
   buildRound,
+  closeSnapshot,
   createSession,
   deleteAnnotation,
   deleteSnapshot,
+  openSnapshot,
   queueRound,
   roundFailed,
   roundSent,
+  selectAnnotation,
   takeSnapshot,
   undo,
   updateAnnotation,
@@ -21,8 +24,8 @@ import {
 import { getSession, getSessions, update } from '@/src/state/store.ts'
 
 // The background owns the sessions: the overlay and the sidebar ask it for every change
-// (src/messages.ts), and watch storage for the result. It captures the snapshots, and sends the
-// rounds to `redline wait`, again until one listens.
+// (src/messages.ts), and watch storage for the result. It captures the screenshots, draws the
+// marks on them, and sends the rounds to `redline wait`, again until one listens.
 
 const OVERLAY_SCRIPT = '/content-scripts/overlay.js'
 const OUTBOX_ALARM = 'redline-outbox'
@@ -80,40 +83,46 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
   if (tabId === undefined) throw new Error(`${request.type}: no tab`)
 
   switch (request.type) {
-    case 'session/start':
-      return start(tabId)
-    case 'session/stop':
-      return stop(tabId)
-    case 'session/discard':
-      return discard(tabId)
     case 'ui/set':
       return change(tabId, (s) => ({ ...s, tool: request.tool ?? s.tool, color: request.color ?? s.color }))
     case 'annotation/add':
       return update(tabId, (s) => addAnnotation(required(s), request.annotation))
     case 'annotation/update':
       return change(tabId, (s) => updateAnnotation(s, request.id, request.patch))
+    case 'annotation/select':
+      // selected, it is to be moved or deleted: the select tool
+      return change(tabId, (s) => {
+        const next = selectAnnotation(s, request.id)
+        return request.id === null ? next : { ...next, tool: 'select' }
+      })
     case 'annotation/delete':
       return change(tabId, (s) => deleteAnnotation(s, request.id))
     case 'annotation/undo':
       return change(tabId, undo)
     case 'snapshot/capture':
+      if (!(await getSession(tabId))?.active) await start(tabId)
       return capture(tabId)
+    case 'snapshot/open':
+      return change(tabId, (s) => openSnapshot(s, request.snapshotId))
+    case 'snapshot/close':
+      return change(tabId, closeSnapshot)
     case 'snapshot/delete': {
       const session = required(await getSession(tabId))
       await change(tabId, (s) => deleteSnapshot(s, request.snapshotId))
-      await deleteImages(session.id, request.snapshotId)
+      await deleteImage(session.id, request.snapshotId)
       return null
+    }
+    case 'snapshot/image': {
+      const image = await getImage(required(await getSession(tabId)).id, request.snapshotId)
+      if (!image) throw new Error(`the screenshot of ${request.snapshotId} is missing`)
+      return image
     }
     case 'comment/set':
       return change(tabId, (s) => ({ ...s, comment: request.comment }))
-    case 'round/submit': {
-      // the marks still on the page go with it, in a last snapshot: those in view, as a capture takes
-      const session = required(await getSession(tabId))
-      if (session.active && session.draft.length > 0) await capture(tabId)
+    case 'round/submit':
       await change(tabId, (s) => queueRound(s, request.status, new Date().toISOString()))
       await flush()
       return null
-    }
   }
 }
 
@@ -161,10 +170,8 @@ function tell<T>(tabId: number, request: ContentRequest): Promise<T> {
   return browser.tabs.sendMessage(tabId, request) as Promise<T>
 }
 
-// The overlay hides while the tab is captured: the badges drawn on the screenshot are the
-// composite's (src/capture/composite.ts), the same on every page.
-// It is one change of the session, so that no mark comes or goes between the screenshot and the
-// snapshot.
+// The overlay hides while the tab is captured, a screenshot it may be showing too: the live page
+// is what is captured. The new snapshot is the one to annotate.
 async function capture(tabId: number): Promise<CaptureResult> {
   const tab = await browser.tabs.get(tabId)
   const captureTab = firefoxCaptureTab()
@@ -181,9 +188,8 @@ async function capture(tabId: number): Promise<CaptureResult> {
     }
 
     const [next, snapshot] = takeSnapshot(session, { ...prepared, capturedAt: new Date().toISOString() })
-    const annotated = await composite(clean, snapshot.annotations, snapshot.viewport)
-    await putImages(session.id, snapshot.id, { clean, annotated })
-    return [next, { snapshotId: snapshot.id, captured: snapshot.annotations.length, left: next.draft.length }]
+    await putImage(session.id, snapshot.id, clean)
+    return [next, { snapshotId: snapshot.id }]
   })
 }
 
@@ -203,14 +209,15 @@ async function flush(): Promise<null> {
     for (const session of Object.values(await getSessions())) {
       if (!session.pending) continue
       try {
-        const images = new Map<string, NonNullable<Awaited<ReturnType<typeof getImages>>>>()
+        // the marks, drawn on the screenshots as the overlay draws them, with their #id
+        const images = new Map<string, { clean: string; annotated: string }>()
         for (const snapshot of session.snapshots) {
-          const pair = await getImages(session.id, snapshot.id)
-          if (pair) images.set(snapshot.id, pair)
+          const clean = await getImage(session.id, snapshot.id)
+          if (clean) images.set(snapshot.id, { clean, annotated: await composite(clean, snapshot.annotations, snapshot.viewport) })
         }
         const accepted = await postRound(buildRound(session, images))
         await update(session.tabId, (s) => [s && roundSent(s, accepted.directory, new Date().toISOString()), null])
-        for (const snapshot of session.snapshots) await deleteImages(session.id, snapshot.id)
+        for (const snapshot of session.snapshots) await deleteImage(session.id, snapshot.id)
         if (session.pending.status === 'done') await deleteSessionImages(session.id)
       } catch (error) {
         const message = error instanceof BridgeError && error.offline ? undefined : error instanceof Error ? error.message : String(error)

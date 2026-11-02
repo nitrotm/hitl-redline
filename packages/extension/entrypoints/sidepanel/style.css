@@ -40,26 +40,66 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
 }
 
-header {
+main {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* whether Claude listens: a bar of its own, at the very bottom */
+.status {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 1;
+  gap: 6px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-h1 {
-  margin: 0;
-  font-size: 15px;
-  color: var(--accent);
+.status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+.status.on {
+  color: var(--fg);
+}
+
+.status.on .dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent);
+}
+
+.capture {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.capture button {
+  width: 100%;
+}
+
+section.current {
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 h2 {
@@ -70,34 +110,6 @@ h2 {
 .meta {
   color: var(--muted);
   font-weight: normal;
-}
-
-.bridge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bridge .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--muted);
-  flex: none;
-}
-
-.bridge.on {
-  color: var(--fg);
-}
-
-.bridge.on .dot {
-  background: var(--ok);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent);
 }
 
 section {
@@ -174,8 +186,17 @@ button.icon {
   border-radius: 8px;
 }
 
+.mark {
+  cursor: pointer;
+}
+
 .mark:hover {
   background: var(--panel);
+}
+
+.mark.selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 .badge {
@@ -236,9 +257,27 @@ textarea:focus {
   overflow: hidden;
 }
 
-.thumb img {
+.thumb svg {
   display: block;
   width: 100%;
+  height: auto;
+}
+
+.thumb.clickable {
+  cursor: pointer;
+}
+
+.thumb.clickable:hover {
+  border-color: var(--accent);
+}
+
+.badge-label {
+  fill: #fff;
+  font:
+    bold 12px system-ui,
+    sans-serif;
+  text-anchor: middle;
+  dominant-baseline: middle;
 }
 
 footer {
@@ -247,10 +286,13 @@ footer {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  position: sticky;
-  bottom: 0;
-  background: var(--bg);
   border-top: 1px solid var(--line);
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .actions {
@@ -262,16 +304,24 @@ footer {
   flex: 1;
 }
 
-.secondary {
-  display: flex;
-  justify-content: space-between;
-}
-
 .empty,
 .note,
-.help {
+.help,
+.help p {
   margin: 0;
   color: var(--muted);
+}
+
+.help {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 1.8;
+}
+
+.start .help {
+  padding: 0;
 }
 
 .note.sent {

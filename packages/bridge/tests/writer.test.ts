@@ -18,6 +18,12 @@ describe('renderFeedback', () => {
     expect(md).toContain('- **#2** freehand mark at (10, 20), 50×60 (no comment)')
   })
 
+  it('tells where an arrow points', () => {
+    const round = makeRound()
+    round.snapshots[0]!.annotations = [{ id: 3, kind: 'arrow', color: '#e11d48', comment: 'This one', from: { x: 300, y: 700 }, to: { x: 120, y: 520 } }]
+    expect(renderFeedback(round)).toContain('- **#3** arrow from (300, 300) pointing at (120, 120)\n\n  > This one')
+  })
+
   it('tells Claude to stop when the round is the last', () => {
     expect(renderFeedback(makeRound({ status: 'done' }))).toContain('Status: **done**')
   })

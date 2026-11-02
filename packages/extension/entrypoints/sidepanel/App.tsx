@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 
 import type { Annotation, Snapshot, Status } from '@redline/shared'
 
+import { badgeFor, fillPath } from '@/src/geometry.ts'
 import { type Request, send } from '@/src/messages.ts'
 import type { Session } from '@/src/state/session.ts'
 
-import { type ActiveTab, useActiveTab, useBridge, useImages, useSession } from './hooks.ts'
+import { type ActiveTab, useActiveTab, useBridge, useImage, useSession } from './hooks.ts'
 
-// The sidebar: the marks of the active tab's session, a comment for each, by snapshot, and the
-// buttons that send the round to Claude.
+// The sidebar: the snapshots of the active tab's session, their marks with a comment each, and
+// the buttons that send the round to Claude. Whether Claude listens is at the bottom.
 
 export function App() {
   const tab = useActiveTab()
@@ -24,60 +25,60 @@ export function App() {
     })
   }
 
+  const live = session && (session.active || session.pending) ? session : undefined
   return (
     <div class="app">
-      <header>
-        <h1>Redline</h1>
-        <BridgeDot status={bridge} />
-      </header>
-      {error && (
-        <p class="error" role="alert">
-          {error}
-        </p>
-      )}
-      {!tab ? (
-        <p class="empty">No tab.</p>
-      ) : session && (session.active || session.pending) ? (
-        <SessionView tab={tab} session={session} ask={ask} />
-      ) : (
-        <Start tab={tab} session={session} ask={ask} />
-      )}
+      <main>
+        {error && (
+          <p class="error" role="alert">
+            {error}
+          </p>
+        )}
+        {!tab ? <p class="empty">No tab.</p> : live ? <SessionView tab={tab} session={live} ask={ask} /> : <Start tab={tab} session={session} ask={ask} />}
+      </main>
+      <StatusBar status={bridge} />
     </div>
   )
 }
 
 type Ask = (request: Request) => Promise<unknown>
 
-function BridgeDot({ status }: { status: Status | undefined }) {
+function StatusBar({ status }: { status: Status | undefined }) {
   const project = status?.project.split('/').filter(Boolean).at(-1)
   return (
-    <span class={`bridge ${status ? 'on' : ''}`} title={status ? `redline wait, in ${status.project}` : 'Run /redline in Claude Code'}>
+    <div class={`status ${status ? 'on' : ''}`} title={status ? `redline wait, in ${status.project}` : 'Run /redline in Claude Code'}>
       <span class="dot" />
       {status ? `Claude is listening${project ? ` · ${project}` : ''}` : 'Claude is not listening'}
-    </span>
+    </div>
+  )
+}
+
+function Help() {
+  return (
+    <div class="help">
+      <p>
+        <kbd>C</kbd> takes a screenshot of the page. Draw on it, then comment each mark as it is drawn.
+      </p>
+      <p>
+        <kbd>1</kbd> select and move · <kbd>2</kbd> rectangle · <kbd>3</kbd> arrow · <kbd>4</kbd> pen
+        <br />
+        <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> colors · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Del</kbd> delete
+      </p>
+    </div>
   )
 }
 
 function Start({ tab, session, ask }: { tab: ActiveTab; session: Session | undefined; ask: Ask }) {
-  const resumable = session && session.lastSent?.status !== 'done'
   return (
     <div class="start">
       <p class="page" title={tab.url}>
         {tab.title || tab.url}
       </p>
-      <button class="primary" onClick={() => ask({ type: 'session/start', tabId: tab.id })}>
-        {resumable ? 'Resume annotating' : 'Annotate this page'}
+      <button class="primary" onClick={() => ask({ type: 'snapshot/capture', tabId: tab.id })}>
+        Take a screenshot
       </button>
       {session?.lastSent?.status === 'done' && <p class="note">Finished: the last round went to {shortPath(session.lastSent.directory)}.</p>}
-      {resumable && (
-        <button class="link" onClick={() => ask({ type: 'session/discard', tabId: tab.id })}>
-          Discard the session
-        </button>
-      )}
-      <p class="help">
-        Draw rectangles (<kbd>R</kbd>) or freehand marks (<kbd>P</kbd>), comment each one here, capture snapshots (<kbd>C</kbd>), and send them to Claude. Turn
-        it on or off with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>.
-      </p>
+      <Help />
     </div>
   )
 }
@@ -85,40 +86,18 @@ function Start({ tab, session, ask }: { tab: ActiveTab; session: Session | undef
 function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; ask: Ask }) {
   const tabId = tab.id
   const locked = Boolean(session.pending)
-  const [notice, setNotice] = useState<string>()
-
-  const capture = async () => {
-    setNotice(undefined)
-    const result = (await ask({ type: 'snapshot/capture', tabId })) as { snapshotId: string; left: number } | undefined
-    if (result?.left)
-      setNotice(
-        `${result.left} mark${result.left === 1 ? ' is' : 's are'} outside the view: scroll to ${result.left === 1 ? 'it' : 'them'}, and capture again.`
-      )
-  }
-  // the marks on the page are captured on the way
-  const canSend = session.snapshots.length > 0 || session.draft.length > 0 || session.comment.trim() !== ''
+  const marks = session.snapshots.reduce((n, s) => n + s.annotations.length, 0)
+  const canSend = session.snapshots.length > 0 || session.comment.trim() !== ''
 
   return (
     <div class="session">
-      <section>
-        <div class="section-head">
-          <h2>On the page</h2>
-          <button onClick={capture} disabled={locked} title="Capture the visible page with its marks (C)">
-            Capture snapshot
-          </button>
-        </div>
-        {session.draft.length === 0 ? (
-          <p class="empty">Draw on the page: a rectangle (R) or a freehand mark (P).</p>
-        ) : (
-          <ul class="marks">
-            {session.draft.map((a) => (
-              <Mark key={a.id} tabId={tabId} annotation={a} ask={ask} disabled={false} />
-            ))}
-          </ul>
-        )}
-        {notice && <p class="note">{notice}</p>}
-      </section>
+      <div class="capture">
+        <button class="primary" disabled={locked} onClick={() => ask({ type: 'snapshot/capture', tabId })} title="A screenshot of the page, to annotate (C)">
+          Take a screenshot
+        </button>
+      </div>
 
+      {session.snapshots.length === 0 && <Help />}
       {session.snapshots.map((snapshot) => (
         <SnapshotView key={snapshot.id} tabId={tabId} session={session} snapshot={snapshot} ask={ask} disabled={locked} />
       ))}
@@ -133,26 +112,13 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
         <Outbox session={session} ask={ask} />
         <div class="actions">
           <button class="primary" disabled={locked || !canSend} onClick={() => ask({ type: 'round/submit', tabId, status: 'feedback' })}>
-            Send to Claude
+            Send to Claude{marks ? ` (${marks} mark${marks === 1 ? '' : 's'})` : ''}
           </button>
           <button
             disabled={locked}
             onClick={() => ask({ type: 'round/submit', tabId, status: 'done' })}
             title="Send this round, if any, and tell Claude you are finished">
             Done
-          </button>
-        </div>
-        {session.draft.length > 0 && !locked && (
-          <p class="note">
-            {session.draft.length === 1 ? 'The mark' : `The ${session.draft.length} marks`} on the page will be captured as you send, if in view.
-          </p>
-        )}
-        <div class="secondary">
-          <button class="link" onClick={() => ask({ type: session.active ? 'session/stop' : 'session/start', tabId })}>
-            {session.active ? 'Hide the overlay' : 'Show the overlay'}
-          </button>
-          <button class="link" onClick={() => confirm('Discard every mark and snapshot of this session?') && ask({ type: 'session/discard', tabId })}>
-            Discard
           </button>
         </div>
       </footer>
@@ -187,33 +153,58 @@ function Outbox({ session, ask }: { session: Session; ask: Ask }) {
 }
 
 function SnapshotView({ tabId, session, snapshot, ask, disabled }: { tabId: number; session: Session; snapshot: Snapshot; ask: Ask; disabled: boolean }) {
-  const images = useImages(session.id, snapshot.id)
+  const current = session.current === snapshot.id
   const time = new Date(snapshot.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  // the newest mark, scrolled to as it is drawn
+  const last = snapshot.annotations.at(-1)?.id
   return (
-    <section>
+    <section class={current ? 'current' : ''}>
       <div class="section-head">
         <h2>
           {snapshot.id} <span class="meta">{time}</span>
         </h2>
-        <button
-          class="icon"
-          disabled={disabled}
-          title={`Delete ${snapshot.id}`}
-          onClick={() => ask({ type: 'snapshot/delete', tabId, snapshotId: snapshot.id })}>
-          ×
-        </button>
+        <div class="tools">
+          {current ? (
+            <button onClick={() => ask({ type: 'snapshot/close', tabId })} title="Leave the screenshot, back to the live page">
+              Back to page
+            </button>
+          ) : (
+            <button
+              disabled={disabled}
+              onClick={() => ask({ type: 'snapshot/open', tabId, snapshotId: snapshot.id })}
+              title="Show it on the page, to draw more">
+              Annotate
+            </button>
+          )}
+          <button
+            class="icon"
+            disabled={disabled}
+            title={`Delete ${snapshot.id}`}
+            onClick={() => ask({ type: 'snapshot/delete', tabId, snapshotId: snapshot.id })}>
+            ×
+          </button>
+        </div>
       </div>
-      {images && (
-        <a class="thumb" href={images.annotated} target="_blank" rel="noreferrer" title="Open the screenshot">
-          <img src={images.annotated} alt={`${snapshot.id}, annotated`} />
-        </a>
-      )}
+      <Preview
+        session={session}
+        snapshot={snapshot}
+        onClick={disabled || current ? undefined : () => ask({ type: 'snapshot/open', tabId, snapshotId: snapshot.id })}
+      />
       {snapshot.annotations.length === 0 ? (
-        <p class="empty">No marks: the screenshot alone.</p>
+        <p class="empty">{current ? 'Draw on the screenshot, on the page.' : 'No marks.'}</p>
       ) : (
         <ul class="marks">
           {snapshot.annotations.map((a) => (
-            <Mark key={a.id} tabId={tabId} annotation={a} ask={ask} disabled={disabled} captured />
+            <Mark
+              key={a.id}
+              tabId={tabId}
+              annotation={a}
+              ask={ask}
+              disabled={disabled}
+              current={current}
+              newest={a.id === last}
+              selected={a.id === session.selected}
+            />
           ))}
         </ul>
       )}
@@ -221,19 +212,77 @@ function SnapshotView({ tabId, session, snapshot, ask, disabled }: { tabId: numb
   )
 }
 
-function Mark({ tabId, annotation, ask, disabled, captured }: { tabId: number; annotation: Annotation; ask: Ask; disabled: boolean; captured?: boolean }) {
-  // the drafts are on the page, to show it where the pointer is
+// the screenshot, with its marks drawn over it as the overlay draws them
+function Preview({ session, snapshot, onClick }: { session: Session; snapshot: Snapshot; onClick?: () => void }) {
+  const image = useImage(session.id, snapshot.id)
+  const { width, height, scrollX, scrollY } = snapshot.viewport
+  return (
+    <div class={`thumb ${onClick ? 'clickable' : ''}`} onClick={onClick} title={onClick ? 'Annotate this screenshot' : undefined}>
+      <svg viewBox={`0 0 ${width} ${height}`}>
+        {image && <image href={image} width={width} height={height} />}
+        <g transform={`translate(${-scrollX} ${-scrollY})`}>
+          {snapshot.annotations.map((a) => {
+            const badge = badgeFor(a)
+            return (
+              <g key={a.id}>
+                {a.kind === 'rect' ? (
+                  <rect x={a.rect.x} y={a.rect.y} width={a.rect.width} height={a.rect.height} fill="none" stroke={a.color} stroke-width={3} />
+                ) : (
+                  <path d={fillPath(a)} fill={a.color} />
+                )}
+                <rect x={badge.x} y={badge.y} width={badge.width} height={badge.height} rx={badge.height / 2} fill={a.color} stroke="#fff" stroke-width={1.5} />
+                <text x={badge.x + badge.width / 2} y={badge.y + badge.height / 2 + 0.5} class="badge-label">
+                  {badge.label}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+      </svg>
+    </div>
+  )
+}
+
+function Mark({
+  tabId,
+  annotation,
+  ask,
+  disabled,
+  current,
+  newest,
+  selected,
+}: {
+  tabId: number
+  annotation: Annotation
+  ask: Ask
+  disabled: boolean
+  current: boolean
+  newest: boolean
+  selected: boolean
+}) {
+  const item = useRef<HTMLLIElement>(null)
+  // the newest mark as it is drawn, and the one selected on the page, come into view
+  useEffect(() => {
+    if ((newest && current) || selected) item.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [newest, current, selected])
+  // the marks of the screenshot on the page, to show it where the pointer is
   const highlight = (id: number | null) => {
-    if (!captured) void browser.tabs.sendMessage(tabId, { type: 'highlight', id }).catch(() => undefined)
+    if (current) void browser.tabs.sendMessage(tabId, { type: 'highlight', id }).catch(() => undefined)
   }
   return (
-    <li class="mark" onMouseEnter={() => highlight(annotation.id)} onMouseLeave={() => highlight(null)}>
+    <li
+      ref={item}
+      class={`mark ${selected ? 'selected' : ''}`}
+      onMouseEnter={() => highlight(annotation.id)}
+      onMouseLeave={() => highlight(null)}
+      // selected here, it is selected on the page, its snapshot shown
+      onClick={() => !selected && !disabled && ask({ type: 'annotation/select', tabId, id: annotation.id })}>
       <span class="badge" style={{ background: annotation.color }}>
         #{annotation.id}
       </span>
       <div class="body">
         <span class="kind">
-          {annotation.kind === 'rect' ? 'Rectangle' : 'Freehand'}
+          {KINDS[annotation.kind]}
           {annotation.target && <code title={annotation.target.selector}> {annotation.target.selector}</code>}
         </span>
         <CommentBox
@@ -243,12 +292,21 @@ function Mark({ tabId, annotation, ask, disabled, captured }: { tabId: number; a
           onSave={(comment) => ask({ type: 'annotation/update', tabId, id: annotation.id, patch: { comment } })}
         />
       </div>
-      <button class="icon" disabled={disabled} title={`Delete #${annotation.id}`} onClick={() => ask({ type: 'annotation/delete', tabId, id: annotation.id })}>
+      <button
+        class="icon"
+        disabled={disabled}
+        title={`Delete #${annotation.id}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          void ask({ type: 'annotation/delete', tabId, id: annotation.id })
+        }}>
         ×
       </button>
     </li>
   )
 }
+
+const KINDS = { rect: 'Rectangle', arrow: 'Arrow', freehand: 'Freehand' } as const
 
 const SAVE_MS = 400
 

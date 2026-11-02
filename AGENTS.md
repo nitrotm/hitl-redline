@@ -44,11 +44,14 @@ nix flake check         # builds the workspace: typecheck and tests included
   result (`watchSession`). Changes go through `update()` in `src/state/store.ts`, one at a time.
 - **Session logic is pure** (`src/state/session.ts`), and unit tested. Keep it so: no browser
   API there.
-- **Coordinates are the page's** (CSS px from the document's top left). The overlay moves its
-  shapes by the scroll. The snapshot records the viewport, and the writer turns marks into
-  screenshot coordinates.
-- **The overlay and the composite draw the same shapes**: `src/geometry.ts` gives the paths and
-  the badge's box to both. Change it there, not in one of them.
+- **A screenshot comes first.** A snapshot is taken without marks; the overlay then shows its
+  screenshot over the page, frozen, and the marks go on it (`session.current`). The selected
+  mark (`session.selected`) is the session's, so the overlay and the sidebar show the same.
+- **Coordinates are the page's** (CSS px from the document's top left): the screenshot's, plus the
+  scroll it was taken at. The writer turns them back into screenshot coordinates.
+- **The overlay, the sidebar's preview and the composite draw the same shapes**: `src/geometry.ts`
+  gives the paths and the badge's box to all three. Change it there, not in one of them. The
+  composite is made when the round is sent; only the clean screenshot is stored.
 - **A round is sent by the background** (`flush()`), from the session at the time it is sent, and
   sent again by the alarm, or by the sidebar once it sees a bridge, until one takes it.
 - **The bridge takes one round and exits.** That exit is what wakes Claude (a background task).

@@ -1,13 +1,14 @@
 import { type Annotation, type FeedbackRound, type RoundStatus, SCHEMA_VERSION, type Snapshot, type SnapshotWithImages, type Viewport } from '@redline/shared'
 
-import { COLORS, boundingBox, intersects } from '../geometry.ts'
+import { COLORS } from '../geometry.ts'
 import type { AnnotationPatch, NewAnnotation } from '../messages.ts'
 
-// A session is the annotating of one tab, from Start until Done: its rounds of feedback, each of
-// snapshots, each a screenshot and the annotations captured with it. The functions here are pure:
-// the background (entrypoints/background.ts) stores what they return.
+// A session is the annotating of one tab, from its first screenshot until Done: its rounds of
+// feedback, each of snapshots, each a screenshot and the marks drawn on it. A screenshot comes
+// first: the overlay shows it, frozen, and the marks go on it. The functions here are pure: the
+// background (entrypoints/background.ts) stores what they return.
 
-export type Tool = 'select' | 'rect' | 'freehand'
+export type Tool = 'select' | 'rect' | 'arrow' | 'freehand'
 
 export interface Session {
   id: string
@@ -19,10 +20,12 @@ export interface Session {
   // ids are never reused in a session: #7 means one mark, in every snapshot and every round
   nextAnnotationId: number
   nextSnapshotNumber: number
-  // drawn on the page, not captured yet
-  draft: Annotation[]
-  // captured, in this round
+  // in this round
   snapshots: Snapshot[]
+  // the snapshot being annotated, whose screenshot the overlay shows; none: the live page
+  current?: string
+  // the mark selected, on the page and in the sidebar alike: one of the current snapshot's
+  selected?: number
   comment: string
   tool: Tool
   color: string
@@ -39,7 +42,6 @@ export function createSession(tabId: number, id: string): Session {
     round: 1,
     nextAnnotationId: 1,
     nextSnapshotNumber: 1,
-    draft: [],
     snapshots: [],
     comment: '',
     tool: 'rect',
@@ -47,33 +49,43 @@ export function createSession(tabId: number, id: string): Session {
   }
 }
 
-export function addAnnotation(session: Session, annotation: NewAnnotation): [Session, Annotation] {
-  const added = { ...annotation, id: session.nextAnnotationId, comment: '' } as Annotation
-  return [{ ...session, nextAnnotationId: session.nextAnnotationId + 1, draft: [...session.draft, added] }, added]
+export function currentSnapshot(session: Session): Snapshot | undefined {
+  return session.snapshots.find((s) => s.id === session.current)
 }
 
-// a draft's or a captured one's: comments stay editable until the round is sent
+function mapAnnotations(session: Session, f: (annotations: Annotation[], snapshot: Snapshot) => Annotation[]): Session {
+  return { ...session, snapshots: session.snapshots.map((s) => ({ ...s, annotations: f(s.annotations, s) })) }
+}
+
+// a mark on the snapshot being annotated
+export function addAnnotation(session: Session, annotation: NewAnnotation): [Session, Annotation] {
+  if (!currentSnapshot(session)) throw new Error('take a screenshot first')
+  const added = { ...annotation, id: session.nextAnnotationId, comment: '' } as Annotation
+  const next = mapAnnotations(session, (annotations, s) => (s.id === session.current ? [...annotations, added] : annotations))
+  return [{ ...next, nextAnnotationId: session.nextAnnotationId + 1 }, added]
+}
+
 export function updateAnnotation(session: Session, id: number, patch: AnnotationPatch): Session {
-  const apply = (a: Annotation): Annotation => (a.id === id ? ({ ...a, ...patch } as Annotation) : a)
-  return {
-    ...session,
-    draft: session.draft.map(apply),
-    snapshots: session.snapshots.map((s) => ({ ...s, annotations: s.annotations.map(apply) })),
-  }
+  return mapAnnotations(session, (annotations) => annotations.map((a) => (a.id === id ? ({ ...a, ...patch } as Annotation) : a)))
 }
 
 export function deleteAnnotation(session: Session, id: number): Session {
-  const keep = (a: Annotation) => a.id !== id
-  return {
-    ...session,
-    draft: session.draft.filter(keep),
-    snapshots: session.snapshots.map((s) => ({ ...s, annotations: s.annotations.filter(keep) })),
-  }
+  const next = mapAnnotations(session, (annotations) => annotations.filter((a) => a.id !== id))
+  return next.selected === id ? selectAnnotation(next, null) : next
 }
 
-// the last mark drawn, if it is still on the page
+// A mark of any snapshot: its snapshot becomes the one annotated. None: no mark is.
+export function selectAnnotation(session: Session, id: number | null): Session {
+  const { selected: _, ...rest } = session
+  if (id === null) return rest
+  const snapshot = session.snapshots.find((s) => s.annotations.some((a) => a.id === id))
+  if (!snapshot) throw new Error(`no mark #${id}`)
+  return { ...rest, current: snapshot.id, selected: id }
+}
+
+// the last mark of the snapshot being annotated
 export function undo(session: Session): Session {
-  const last = session.draft.at(-1)
+  const last = currentSnapshot(session)?.annotations.at(-1)
   return last ? deleteAnnotation(session, last.id) : session
 }
 
@@ -84,26 +96,28 @@ export interface Capture {
   viewport: Viewport
 }
 
-// The drafts in the viewport go into a new snapshot; the others stay on the page, for a snapshot
-// of their own once scrolled to.
+// a new snapshot, without marks yet, which becomes the one being annotated
 export function takeSnapshot(session: Session, capture: Capture): [Session, Snapshot] {
-  const { viewport: v } = capture
-  const visible = { x: v.scrollX, y: v.scrollY, width: v.width, height: v.height }
-  const captured = session.draft.filter((a) => intersects(boundingBox(a), visible))
-  const snapshot: Snapshot = { id: `S${session.nextSnapshotNumber}`, ...capture, annotations: captured }
-  return [
-    {
-      ...session,
-      nextSnapshotNumber: session.nextSnapshotNumber + 1,
-      draft: session.draft.filter((a) => !captured.includes(a)),
-      snapshots: [...session.snapshots, snapshot],
-    },
-    snapshot,
-  ]
+  const snapshot: Snapshot = { id: `S${session.nextSnapshotNumber}`, ...capture, annotations: [] }
+  const { selected: _, ...rest } = session
+  return [{ ...rest, nextSnapshotNumber: session.nextSnapshotNumber + 1, snapshots: [...session.snapshots, snapshot], current: snapshot.id }, snapshot]
+}
+
+export function openSnapshot(session: Session, snapshotId: string): Session {
+  if (!session.snapshots.some((s) => s.id === snapshotId)) throw new Error(`no snapshot ${snapshotId}`)
+  if (session.current === snapshotId) return session
+  const { selected: _, ...rest } = session
+  return { ...rest, current: snapshotId }
+}
+
+export function closeSnapshot(session: Session): Session {
+  const { current: _, selected: __, ...rest } = session
+  return rest
 }
 
 export function deleteSnapshot(session: Session, snapshotId: string): Session {
-  return { ...session, snapshots: session.snapshots.filter((s) => s.id !== snapshotId) }
+  const next = { ...session, snapshots: session.snapshots.filter((s) => s.id !== snapshotId) }
+  return session.current === snapshotId ? closeSnapshot(next) : next
 }
 
 export function queueRound(session: Session, status: RoundStatus, now: string): Session {
@@ -120,17 +134,17 @@ export function buildRound(session: Session, images: Map<string, SnapshotWithIma
     comment: session.comment,
     snapshots: session.snapshots.map((s) => {
       const pair = images.get(s.id)
-      if (!pair) throw new Error(`the screenshots of ${s.id} are missing`)
+      if (!pair) throw new Error(`the screenshot of ${s.id} is missing`)
       return { ...s, images: pair }
     }),
   }
 }
 
-// The bridge took the round: the next one starts empty, but for the marks still on the page. A
-// 'done' round ends the session.
+// The bridge took the round: the next one starts empty, on the live page. A 'done' round ends
+// the session.
 export function roundSent(session: Session, directory: string, now: string): Session {
   const status = session.pending?.status ?? 'feedback'
-  const { pending: _, ...rest } = session
+  const { pending: _, current: __, selected: ___, ...rest } = session
   return {
     ...rest,
     active: status === 'done' ? false : session.active,

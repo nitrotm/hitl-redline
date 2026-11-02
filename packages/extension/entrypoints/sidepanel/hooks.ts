@@ -4,7 +4,7 @@ import { type Status, isUnder } from '@redline/shared'
 
 import { bridgeStatus } from '@/src/bridge-client.ts'
 import { send } from '@/src/messages.ts'
-import { type SnapshotImages, getImages } from '@/src/state/images.ts'
+import { getImage } from '@/src/state/images.ts'
 import type { Session } from '@/src/state/session.ts'
 import { getSession, watchSession } from '@/src/state/store.ts'
 
@@ -86,10 +86,11 @@ export function useBridge(pending: boolean): Status | undefined {
   return status
 }
 
-export function useImages(sessionId: string, snapshotId: string): SnapshotImages | undefined {
-  const [images, setImages] = useState<SnapshotImages>()
+// the screenshot of a snapshot, as a data URL
+export function useImage(sessionId: string, snapshotId: string): string | undefined {
+  const [image, setImage] = useState<string>()
   useEffect(() => {
-    void getImages(sessionId, snapshotId).then(setImages)
+    void getImage(sessionId, snapshotId).then(setImage)
   }, [sessionId, snapshotId])
-  return images
+  return image
 }

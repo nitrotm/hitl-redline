@@ -77,7 +77,7 @@ export function renderFeedback(round: FeedbackRound): string {
       '---',
       '',
       'Coordinates are CSS pixels of the screenshot, from its top left corner; a screenshot pixel is `dpr` times smaller.',
-      "Each `#id` is drawn next to its mark on the annotated screenshot, and is the same mark in every snapshot of the session. The selector is the element under the mark's center.",
+      "Each `#id` is drawn next to its mark on the annotated screenshot, and is the same mark in every snapshot of the session. The selector is the element under the mark's center, or under an arrow's tip.",
       ''
     )
   }
@@ -101,11 +101,14 @@ function renderSnapshot(snapshot: SnapshotWithImages | Snapshot): string[] {
 }
 
 function renderAnnotation(annotation: Annotation, snapshot: Snapshot): string {
-  const box = boundingBox(annotation)
-  const x = Math.round(box.x - snapshot.viewport.scrollX)
-  const y = Math.round(box.y - snapshot.viewport.scrollY)
-  const shape = annotation.kind === 'rect' ? 'rectangle' : 'freehand mark'
-  const where = `${shape} at (${x}, ${y}), ${Math.round(box.width)}×${Math.round(box.height)}`
+  // in the screenshot: the page's coordinates, less the scroll it was taken at
+  const at = (p: { x: number; y: number }) => `(${Math.round(p.x - snapshot.viewport.scrollX)}, ${Math.round(p.y - snapshot.viewport.scrollY)})`
+  let where: string
+  if (annotation.kind === 'arrow') where = `arrow from ${at(annotation.from)} pointing at ${at(annotation.to)}`
+  else {
+    const box = boundingBox(annotation)
+    where = `${annotation.kind === 'rect' ? 'rectangle' : 'freehand mark'} at ${at(box)}, ${Math.round(box.width)}×${Math.round(box.height)}`
+  }
   const target = annotation.target ? ` on \`${annotation.target.selector}\`${annotation.target.text ? ` "${oneLine(annotation.target.text, 60)}"` : ''}` : ''
   const comment = annotation.comment.trim() ? `\n\n${quote(annotation.comment, '  ')}` : ' (no comment)'
   return `- **#${annotation.id}** ${where}${target}${comment}`

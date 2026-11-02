@@ -3,10 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   addAnnotation,
   buildRound,
+  closeSnapshot,
   createSession,
+  currentSnapshot,
   deleteAnnotation,
+  deleteSnapshot,
+  openSnapshot,
   queueRound,
   roundSent,
+  selectAnnotation,
   takeSnapshot,
   undo,
   updateAnnotation,
@@ -16,79 +21,112 @@ const viewport = { width: 1000, height: 800, dpr: 2, scrollX: 0, scrollY: 0 }
 const capture = (scrollY = 0) => ({ url: 'http://localhost/', title: 'Home', capturedAt: '2026-11-02T10:00:00.000Z', viewport: { ...viewport, scrollY } })
 const rect = (y: number) => ({ kind: 'rect' as const, color: '#e11d48', rect: { x: 10, y, width: 50, height: 20 } })
 
+// a session with one snapshot, S1, and a mark at each of YS
 function drawn(...ys: number[]) {
-  let session = createSession(1, 'session-1')
+  let [session] = takeSnapshot(createSession(1, 'session-1'), capture())
   for (const y of ys) [session] = addAnnotation(session, rect(y))
   return session
 }
 
-describe('annotation ids', () => {
-  it('are never reused, after a delete or a snapshot', () => {
-    let session = drawn(10, 20)
-    session = deleteAnnotation(session, 2)
-    ;[session] = takeSnapshot(session, capture())
-    const [, added] = addAnnotation(session, rect(30))
-    expect(added.id).toBe(3)
+describe('screenshots come first', () => {
+  it('a mark needs one', () => {
+    expect(() => addAnnotation(createSession(1, 's'), rect(10))).toThrow('take a screenshot first')
   })
 
-  it('carry on from round to round', () => {
+  it('a new screenshot is the one annotated', () => {
     let session = drawn(10)
-    ;[session] = takeSnapshot(session, capture())
-    session = roundSent(queueRound(session, 'feedback', 'now'), '/p/.redline/rounds/001', 'now')
-    expect(addAnnotation(session, rect(10))[1].id).toBe(2)
+    let snapshot
+    ;[session, snapshot] = takeSnapshot(session, capture(500))
+    expect(snapshot).toMatchObject({ id: 'S2', annotations: [] })
+    expect(session.current).toBe('S2')
+    ;[session] = addAnnotation(session, rect(600))
+    expect(session.snapshots.map((s) => s.annotations.map((a) => a.id))).toEqual([[1], [2]])
+  })
+
+  it('an older one can be annotated again, or left for the live page', () => {
+    let [session] = takeSnapshot(drawn(10), capture())
+    session = openSnapshot(session, 'S1')
+    ;[session] = addAnnotation(session, rect(20))
+    expect(currentSnapshot(session)?.annotations.map((a) => a.id)).toEqual([1, 2])
+    expect(closeSnapshot(session).current).toBeUndefined()
+    expect(() => openSnapshot(session, 'S9')).toThrow()
+  })
+
+  it('deleting the one annotated goes back to the live page', () => {
+    expect(deleteSnapshot(drawn(10), 'S1')).toMatchObject({ snapshots: [] })
+    expect(deleteSnapshot(drawn(10), 'S1').current).toBeUndefined()
   })
 })
 
-describe('takeSnapshot', () => {
-  it('captures the drafts in the viewport, and leaves the others on the page', () => {
-    const [session, snapshot] = takeSnapshot(drawn(100, 2000), capture())
-    expect(snapshot.id).toBe('S1')
-    expect(snapshot.annotations.map((a) => a.id)).toEqual([1])
-    expect(session.draft.map((a) => a.id)).toEqual([2])
+describe('annotation ids', () => {
+  it('are never reused, after a delete or a new snapshot', () => {
+    let session = deleteAnnotation(drawn(10, 20), 2)
+    ;[session] = takeSnapshot(session, capture())
+    expect(addAnnotation(session, rect(30))[1].id).toBe(3)
+  })
 
-    const [, second] = takeSnapshot(session, capture(1800))
-    expect(second.id).toBe('S2')
-    expect(second.annotations.map((a) => a.id)).toEqual([2])
+  it('carry on from round to round', () => {
+    let session = roundSent(queueRound(drawn(10), 'feedback', 'now'), '/p/.redline/rounds/001', 'now')
+    ;[session] = takeSnapshot(session, capture())
+    expect(addAnnotation(session, rect(10))[1].id).toBe(2)
+    expect(session.snapshots[0]!.id).toBe('S2')
   })
 })
 
 describe('updateAnnotation', () => {
-  it('changes a comment, drafted or captured', () => {
+  it('changes a comment, or a color, in any snapshot', () => {
     let [session] = takeSnapshot(drawn(10), capture())
     ;[session] = addAnnotation(session, rect(20))
-    session = updateAnnotation(updateAnnotation(session, 1, { comment: 'bigger' }), 2, { comment: 'red' })
+    session = updateAnnotation(updateAnnotation(session, 1, { comment: 'bigger' }), 2, { color: '#2563eb' })
     expect(session.snapshots[0]!.annotations[0]!.comment).toBe('bigger')
-    expect(session.draft[0]!.comment).toBe('red')
+    expect(session.snapshots[1]!.annotations[0]!.color).toBe('#2563eb')
   })
 })
 
 describe('undo', () => {
-  it('removes the last mark still on the page', () => {
-    expect(undo(drawn(10, 20)).draft.map((a) => a.id)).toEqual([1])
-    expect(undo(createSession(1, 's')).draft).toEqual([])
+  it('removes the last mark of the snapshot annotated', () => {
+    expect(currentSnapshot(undo(drawn(10, 20)))?.annotations.map((a) => a.id)).toEqual([1])
+    const [empty] = takeSnapshot(createSession(1, 's'), capture())
+    expect(undo(empty)).toEqual(empty)
   })
 })
 
 describe('rounds', () => {
   it('are built from the session, with the screenshots', () => {
-    const [session] = takeSnapshot(drawn(10), capture())
     const images = new Map([['S1', { clean: 'data:image/png;base64,AA', annotated: 'data:image/png;base64,BB' }]])
-    const round = buildRound({ ...queueRound(session, 'feedback', 'now'), comment: 'tighter' }, images)
+    const round = buildRound({ ...queueRound(drawn(10), 'feedback', 'now'), comment: 'tighter' }, images)
     expect(round).toMatchObject({ version: 1, sessionId: 'session-1', round: 1, status: 'feedback', comment: 'tighter' })
     expect(round.snapshots[0]!.images.annotated).toBe('data:image/png;base64,BB')
   })
 
-  it('start the next one empty, but for the marks on the page', () => {
-    let [session] = takeSnapshot(drawn(10, 5000), capture())
-    session = roundSent(queueRound({ ...session, comment: 'x' }, 'feedback', 'now'), '/d', 'later')
+  it('start the next one empty, on the live page', () => {
+    const session = roundSent(queueRound({ ...drawn(10), comment: 'x' }, 'feedback', 'now'), '/d', 'later')
     expect(session).toMatchObject({ round: 2, snapshots: [], comment: '', active: true, lastSent: { round: 1, directory: '/d' } })
     expect(session.pending).toBeUndefined()
-    expect(session.draft).toHaveLength(1)
+    expect(session.current).toBeUndefined()
   })
 
   it('end the session when done', () => {
     const session = roundSent(queueRound(drawn(), 'done', 'now'), '/d', 'later')
     expect(session.active).toBe(false)
     expect(session.lastSent?.status).toBe('done')
+  })
+})
+
+describe('selectAnnotation', () => {
+  it('selects a mark of any snapshot, and shows that snapshot', () => {
+    let [session] = takeSnapshot(drawn(10), capture())
+    session = selectAnnotation(session, 1)
+    expect(session).toMatchObject({ current: 'S1', selected: 1 })
+    expect(selectAnnotation(session, null).selected).toBeUndefined()
+    expect(() => selectAnnotation(session, 9)).toThrow()
+  })
+
+  it('is lost with its mark, or when another snapshot shows', () => {
+    const session = selectAnnotation(drawn(10, 20), 2)
+    expect(deleteAnnotation(session, 2).selected).toBeUndefined()
+    expect(deleteAnnotation(session, 1).selected).toBe(2)
+    expect(takeSnapshot(session, capture())[0].selected).toBeUndefined()
+    expect(closeSnapshot(session).selected).toBeUndefined()
   })
 })

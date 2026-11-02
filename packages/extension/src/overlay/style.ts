@@ -1,12 +1,26 @@
 import { RECT_STROKE } from '../geometry.ts'
 
+// the cursors of the drawing tools: a crosshair for the rectangle, a crosshair with an arrow for
+// the arrow, a pencil for the pen, its tip where the stroke goes
+const ARROW = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g stroke="#111" stroke-width="3" stroke-linecap="round"><path d="M6 1v10M1 6h10"/></g><g stroke="#fff" stroke-width="1.2" stroke-linecap="round"><path d="M6 1v10M1 6h10"/></g><path d="M12 22L21 13M15 13h6v6" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+)}") 6 6, crosshair`
+const PENCIL = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 21l1.5-5L16 4.5a2.1 2.1 0 013 3L7.5 19z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/><path d="M3 21l1.5-5 3 3z" fill="#111"/></svg>'
+)}") 3 21, crosshair`
+
 // the overlay's styles, in its shadow root: nothing of the page's reaches it
 export const OVERLAY_CSS = `
 :host { all: initial; }
-.canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: visible; pointer-events: none; }
-.canvas.drawing { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.frozen { position: fixed; inset: 0; background: #18181b; pointer-events: auto; }
+.frozen[hidden] { display: none; }
+.canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; }
+.canvas[data-tool="rect"] { cursor: crosshair; }
+.canvas[data-tool="arrow"] { cursor: ${ARROW}; }
+.canvas[data-tool="freehand"] { cursor: ${PENCIL}; }
+.canvas[data-tool="select"] { cursor: default; }
 .mark { pointer-events: none; }
-.canvas:not(.drawing) .mark { pointer-events: auto; cursor: move; }
+.canvas[data-tool="select"] .mark { pointer-events: auto; cursor: move; }
 .hit { fill: transparent; stroke: transparent; stroke-width: 14; }
 .rect { fill: none; stroke-width: ${RECT_STROKE}; }
 .halo { fill: none; stroke: rgba(255, 255, 255, 0.9); stroke-width: ${RECT_STROKE}; }
@@ -22,21 +36,42 @@ export const OVERLAY_CSS = `
   background: #1f2023; color: #f4f4f5; border-radius: 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   pointer-events: auto; font: 13px system-ui, sans-serif; user-select: none;
 }
+.toolbar.live .annotating { display: none; }
+.annotating { display: contents; }
 .toolbar button {
-  all: unset; box-sizing: border-box; width: 30px; height: 30px; display: grid; place-items: center;
+  all: unset; box-sizing: border-box; min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   border-radius: 7px; cursor: pointer; color: inherit;
 }
 .toolbar button:hover { background: #3a3b40; }
 .toolbar button.on { background: #e11d48; }
 .toolbar button:disabled { opacity: 0.35; cursor: default; background: none; }
 .toolbar button:focus-visible { outline: 2px solid #60a5fa; }
-.toolbar .swatch::after { content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1.5px #1f2023, 0 0 0 3px transparent; }
+.toolbar .capture { padding: 0 8px; }
+.toolbar:not(.live) .capture .label { display: none; }
+.toolbar.live .capture { background: #e11d48; font-weight: 600; }
+.toolbar .grip { display: grid; place-items: center; width: 14px; height: 30px; cursor: grab; color: #71717a; }
+.toolbar .grip svg { width: 14px; }
+.toolbar .swatch::after { content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
 .toolbar .swatch.on { background: none; }
 .toolbar .swatch.on::after { box-shadow: 0 0 0 2px #1f2023, 0 0 0 3.5px #f4f4f5; }
 .toolbar .sep { width: 1px; height: 20px; background: #3a3b40; margin: 0 3px; }
+.toolbar .snapshot-id { padding: 0 4px; color: #a1a1aa; font-weight: 600; }
+
+.popover {
+  position: fixed; display: flex; gap: 8px; align-items: flex-start; width: 320px; padding: 8px;
+  background: #fff; color: #18181b; border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); pointer-events: auto;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+.popover[hidden] { display: none; }
+.popover .badge { flex: none; padding: 1px 7px; border-radius: 10px; color: #fff; font-weight: 700; font-size: 12px; stroke: none; }
+.popover textarea {
+  flex: 1; resize: vertical; min-height: 40px; font: inherit; color: inherit; background: #fff;
+  border: 1px solid #d4d4d8; border-radius: 6px; padding: 5px 7px; outline: none;
+}
+.popover textarea:focus { border-color: #e11d48; }
 
 .toast {
-  position: fixed; top: 58px; right: 12px; max-width: 360px; padding: 8px 12px; border-radius: 8px;
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); max-width: 420px; padding: 8px 12px; border-radius: 8px;
   background: #1f2023; color: #f4f4f5; font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 .toast.error { background: #7f1d1d; }

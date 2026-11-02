@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { aim } from '../src/geometry.ts'
 import { isExtensionOrigin, isUnder } from '../src/protocol.ts'
 
 describe('isExtensionOrigin', () => {
@@ -27,5 +28,13 @@ describe('isUnder', () => {
     expect(isUnder('http://localhost:5174/', 'http://localhost:5173/')).toBe(false)
     expect(isUnder('http://localhost:5173/other', 'http://localhost:5173/app/')).toBe(false)
     expect(isUnder('not a url', 'http://localhost:5173/')).toBe(false)
+  })
+})
+
+describe('aim', () => {
+  it('is the tip of an arrow, the center of the others', () => {
+    const base = { id: 1, color: '', comment: '' }
+    expect(aim({ ...base, kind: 'arrow', from: { x: 0, y: 0 }, to: { x: 40, y: 10 } })).toEqual({ x: 40, y: 10 })
+    expect(aim({ ...base, kind: 'rect', rect: { x: 10, y: 10, width: 20, height: 40 } })).toEqual({ x: 20, y: 30 })
   })
 })

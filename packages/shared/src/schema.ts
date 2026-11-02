@@ -35,8 +35,10 @@ const annotationBase = {
 }
 
 export const RectAnnotation = z.object({ ...annotationBase, kind: z.literal('rect'), rect: Rect })
+// from where it starts to what it points at
+export const ArrowAnnotation = z.object({ ...annotationBase, kind: z.literal('arrow'), from: Point, to: Point })
 export const FreehandAnnotation = z.object({ ...annotationBase, kind: z.literal('freehand'), points: z.array(Point).min(2) })
-export const Annotation = z.discriminatedUnion('kind', [RectAnnotation, FreehandAnnotation])
+export const Annotation = z.discriminatedUnion('kind', [RectAnnotation, ArrowAnnotation, FreehandAnnotation])
 export type Annotation = z.infer<typeof Annotation>
 export type AnnotationKind = Annotation['kind']
 

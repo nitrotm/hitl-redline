@@ -1,6 +1,6 @@
 import type { Annotation, Viewport } from '@redline/shared'
 
-import { RECT_STROKE, badgeFor, freehandPath } from '../geometry.ts'
+import { RECT_STROKE, badgeFor, fillPath } from '../geometry.ts'
 
 // The annotated screenshot: the clean one, with the marks and their #id badges drawn on it as the
 // overlay draws them. Canvas without a document (OffscreenCanvas, createImageBitmap), so that it
@@ -34,7 +34,7 @@ function drawShape(ctx: OffscreenCanvasRenderingContext2D, annotation: Annotatio
     ctx.strokeRect(x, y, width, height)
   } else {
     ctx.fillStyle = annotation.color
-    ctx.fill(new Path2D(freehandPath(annotation.points)))
+    ctx.fill(new Path2D(fillPath(annotation)))
   }
   ctx.restore()
 }

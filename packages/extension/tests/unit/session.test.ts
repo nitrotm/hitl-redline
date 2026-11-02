@@ -16,6 +16,7 @@ import {
   takeSnapshot,
   undo,
   updateAnnotation,
+  upgradeSession,
 } from '../../src/state/session.ts'
 
 const viewport = { width: 1000, height: 800, dpr: 2, scrollX: 0, scrollY: 0 }
@@ -140,5 +141,53 @@ describe('tools', () => {
     expect(session).toMatchObject({ tool: 'select', drawingTool: 'arrow' })
     ;[session] = takeSnapshot(session, capture())
     expect(session.tool).toBe('arrow')
+  })
+})
+
+describe('upgradeSession', () => {
+  it('reads a session an earlier version stored', () => {
+    const [current] = takeSnapshot(createSession(1, 's'), capture())
+    const { device: _, drawingTool: __, ...old } = current
+    const stored = {
+      ...old,
+      draft: [{ id: 9, kind: 'rect', color: '', comment: '', rect: { x: 0, y: 0, width: 1, height: 1 } }],
+      snapshots: [
+        {
+          ...current.snapshots[0]!,
+          annotations: [
+            {
+              id: 1,
+              kind: 'freehand',
+              color: '',
+              comment: '',
+              points: [
+                { x: 1, y: 2 },
+                { x: 3, y: 4 },
+              ],
+            },
+          ],
+        },
+      ],
+    } as unknown as Parameters<typeof upgradeSession>[0]
+    const session = upgradeSession(stored)
+    expect(session).toMatchObject({ device: 'window', drawingTool: 'freehand' })
+    expect('draft' in session).toBe(false)
+    expect(session.snapshots[0]!.annotations[0]).toEqual({
+      id: 1,
+      kind: 'freehand',
+      color: '',
+      comment: '',
+      strokes: [
+        [
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+        ],
+      ],
+    })
+  })
+
+  it('leaves a session of this version as it is', () => {
+    const session = drawn(10)
+    expect(upgradeSession(session)).toEqual(session)
   })
 })

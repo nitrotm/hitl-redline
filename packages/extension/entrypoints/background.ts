@@ -84,6 +84,8 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
   if (tabId === undefined) throw new Error(`${request.type}: no tab`)
 
   switch (request.type) {
+    case 'session/discard':
+      return discard(tabId)
     case 'ui/set':
       if (!(await getSession(tabId))?.active) await start(tabId)
       return change(tabId, (s) => ({ ...(request.tool ? setTool(s, request.tool) : s), color: request.color ?? s.color, device: request.device ?? s.device }))

@@ -1,4 +1,4 @@
-import type { Session } from './session.ts'
+import { type Session, upgradeSession } from './session.ts'
 
 // The sessions, by tab, in storage.local: the background writes them (through update(), one change
 // at a time), the overlay and the sidebar watch them.
@@ -8,7 +8,12 @@ const KEY = 'redline:sessions'
 type Sessions = Record<string, Session>
 
 export async function getSessions(): Promise<Sessions> {
-  return ((await browser.storage.local.get(KEY))[KEY] as Sessions | undefined) ?? {}
+  return upgrade((await browser.storage.local.get(KEY))[KEY] as Sessions | undefined)
+}
+
+// as this version reads them, whichever stored them
+function upgrade(sessions: Sessions | undefined): Sessions {
+  return Object.fromEntries(Object.entries(sessions ?? {}).map(([tabId, session]) => [tabId, upgradeSession(session)]))
 }
 
 export async function getSession(tabId: number): Promise<Session | undefined> {
@@ -40,7 +45,7 @@ export function watchSession(tabId: () => number | undefined, listener: (session
   const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
     const id = tabId()
     if (area !== 'local' || !(KEY in changes) || id === undefined) return
-    listener(((changes[KEY]!.newValue as Sessions | undefined) ?? {})[id])
+    listener(upgrade(changes[KEY]!.newValue as Sessions | undefined)[id])
   }
   browser.storage.onChanged.addListener(onChanged)
   return () => browser.storage.onChanged.removeListener(onChanged)

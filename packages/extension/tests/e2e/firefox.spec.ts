@@ -92,3 +92,34 @@ test('screenshot, draw, comment and send a round', async () => {
   await expectRound(bridge, expect)
   await driver.wait(until.elementLocated(By.css('.note.sent')), 5_000)
 })
+
+test('read a session that an earlier version stored', async () => {
+  await driver.switchTo().newWindow('tab')
+  await driver.get(fixtures.url)
+  await driver.switchTo().newWindow('tab')
+  await driver.get(`moz-extension://${UUID}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)
+
+  // the session of the page's tab, as the version before the round's format 2 stored it: a pen mark of points
+  await driver.executeAsyncScript(`
+    const done = arguments[arguments.length - 1]
+    const url = ${JSON.stringify(fixtures.url)}
+    browser.tabs.query({}).then(async (tabs) => {
+      const tab = tabs.find((t) => t.url === url)
+      const snapshot = {
+        id: 'S1', url, title: 'Old', capturedAt: '2026-11-02T10:00:00.000Z',
+        viewport: { width: 1000, height: 800, dpr: 1, scrollX: 0, scrollY: 0 },
+        annotations: [{ id: 1, kind: 'freehand', color: '#e11d48', comment: 'Old pen mark', points: [{ x: 10, y: 10 }, { x: 60, y: 40 }] }],
+      }
+      const session = {
+        id: 'old', tabId: tab.id, active: true, round: 1, nextAnnotationId: 2, nextSnapshotNumber: 2,
+        draft: [], snapshots: [snapshot], current: 'S1', comment: '', tool: 'freehand', color: '#e11d48',
+      }
+      await browser.storage.local.set({ 'redline:sessions': { [tab.id]: session } })
+      done()
+    })
+  `)
+  await driver.navigate().refresh()
+  await driver.wait(async () => (await driver.findElements(By.css('.marks textarea'))).length === 1, 10_000)
+  expect(await driver.findElement(By.css('.marks textarea')).getAttribute('value')).toBe('Old pen mark')
+  expect(await driver.findElement(By.css('.marks .kind')).getText()).toContain('Freehand')
+})

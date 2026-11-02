@@ -1,4 +1,13 @@
-import { type Annotation, type FeedbackRound, type RoundStatus, SCHEMA_VERSION, type Snapshot, type SnapshotWithImages, type Viewport } from '@redline/shared'
+import {
+  type Annotation,
+  type FeedbackRound,
+  type Point,
+  type RoundStatus,
+  SCHEMA_VERSION,
+  type Snapshot,
+  type SnapshotWithImages,
+  type Viewport,
+} from '@redline/shared'
 
 import { WINDOW } from '../devices.ts'
 import { COLORS } from '../geometry.ts'
@@ -54,6 +63,25 @@ export function createSession(tabId: number, id: string): Session {
     drawingTool: 'freehand',
     color: COLORS[0],
     device: WINDOW,
+  }
+}
+
+// A session as an earlier version stored it, in this version's shape: its pen marks of points
+// (the round's format 1) get them as one stroke, the marks drawn before screenshots came first
+// (draft) go, the fields added since get their defaults.
+export function upgradeSession(stored: Session): Session {
+  const { draft: _, ...session } = stored as Session & { draft?: unknown }
+  const annotation = (a: Annotation): Annotation => {
+    const old = a as Annotation & { points?: Point[] }
+    if (old.kind !== 'freehand' || old.strokes) return a
+    const { points, ...rest } = old
+    return { ...rest, strokes: [points ?? []] }
+  }
+  return {
+    ...session,
+    device: session.device ?? WINDOW,
+    drawingTool: session.drawingTool ?? 'freehand',
+    snapshots: (session.snapshots ?? []).map((s) => ({ ...s, annotations: s.annotations.map(annotation) })),
   }
 }
 

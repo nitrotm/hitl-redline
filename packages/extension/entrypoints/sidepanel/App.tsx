@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useErrorBoundary, useRef, useState } from 'preact/hooks'
 
 import type { Annotation, Snapshot, Status } from '@redline/shared'
 
@@ -35,7 +35,15 @@ export function App() {
             {error}
           </p>
         )}
-        {!tab ? <p class="empty">No tab.</p> : live ? <SessionView tab={tab} session={live} ask={ask} /> : <Start tab={tab} session={session} ask={ask} />}
+        {!tab ? (
+          <p class="empty">No tab.</p>
+        ) : live ? (
+          <Guard tab={tab} ask={ask}>
+            <SessionView tab={tab} session={live} ask={ask} />
+          </Guard>
+        ) : (
+          <Start tab={tab} session={session} ask={ask} />
+        )}
       </main>
       <StatusBar status={bridge} />
     </div>
@@ -43,6 +51,26 @@ export function App() {
 }
 
 type Ask = (request: Request) => Promise<unknown>
+
+// What fails to show the session shows as an error, with a way out, rather than an empty sidebar.
+function Guard({ tab, ask, children }: { tab: ActiveTab; ask: Ask; children: preact.ComponentChildren }) {
+  const [error, reset] = useErrorBoundary()
+  if (!error) return <>{children}</>
+  return (
+    <div class="start">
+      <p class="error" role="alert">
+        The session cannot be shown: {error instanceof Error ? error.message : String(error)}
+      </p>
+      <button
+        onClick={async () => {
+          await ask({ type: 'session/discard', tabId: tab.id })
+          reset()
+        }}>
+        Discard this session
+      </button>
+    </div>
+  )
+}
 
 function StatusBar({ status }: { status: Status | undefined }) {
   const project = status?.project.split('/').filter(Boolean).at(-1)

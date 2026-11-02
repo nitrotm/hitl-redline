@@ -14,6 +14,8 @@ export type AnnotationPatch = { comment?: string; color?: string; target?: Targe
 
 export type Request =
   // the tool, the color, the device; it starts the session if need be
+  // every mark and screenshot of the tab's session, gone: the way out of a session gone wrong
+  | { type: 'session/discard'; tabId?: number }
   | { type: 'ui/set'; tabId?: number; tool?: Tool; color?: string; device?: string }
   | { type: 'annotation/add'; tabId?: number; annotation: NewAnnotation }
   | { type: 'annotation/update'; tabId?: number; id: number; patch: AnnotationPatch }
@@ -34,6 +36,7 @@ export type Request =
   | { type: 'whoami' }
 
 export interface Responses {
+  'session/discard': null
   'ui/set': null
   'annotation/add': Annotation
   'annotation/update': null

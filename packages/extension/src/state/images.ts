@@ -35,7 +35,9 @@ export function putImage(sessionId: string, snapshotId: string, png: string): Pr
 }
 
 export async function getImage(sessionId: string, snapshotId: string): Promise<string | undefined> {
-  return (await run('readonly', (store) => store.get(key(sessionId, snapshotId)))) as string | undefined
+  const stored = (await run('readonly', (store) => store.get(key(sessionId, snapshotId)))) as string | { clean: string } | undefined
+  // an earlier version stored the pair, clean and annotated
+  return typeof stored === 'object' ? stored.clean : stored
 }
 
 export function deleteImage(sessionId: string, snapshotId: string): Promise<undefined> {

@@ -47,7 +47,8 @@ export const OVERLAY_CSS = `
   background: #1f2023; color: #f4f4f5; border-radius: 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   pointer-events: auto; font: 13px system-ui, sans-serif; user-select: none;
 }
-.toolbar.live .annotating { display: none; }
+/* on the live page, no toolbar: the sidebar has what it needs */
+.toolbar.live { display: none; }
 .annotating { display: contents; }
 .toolbar button {
   all: unset; box-sizing: border-box; min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -57,14 +58,6 @@ export const OVERLAY_CSS = `
 .toolbar button.on { background: #e11d48; }
 .toolbar button:disabled { opacity: 0.35; cursor: default; background: none; }
 .toolbar button:focus-visible { outline: 2px solid #60a5fa; }
-.toolbar .capture { padding: 0 8px; }
-/* a screenshot is of the live page: not taken from a screenshot */
-.toolbar:not(.live) .capture { display: none; }
-.toolbar.live .capture { background: #e11d48; font-weight: 600; }
-.toolbar .device-select {
-  font: inherit; color: inherit; background: #2a2b2f; border: 1px solid #3a3b40; border-radius: 7px; height: 30px; padding: 0 6px; margin-right: 2px; cursor: pointer;
-}
-.toolbar:not(.live) .device-select { display: none; }
 .toolbar .grip { display: grid; place-items: center; width: 14px; height: 30px; cursor: grab; color: #71717a; }
 .toolbar .grip svg { width: 14px; }
 .toolbar .swatch::after { content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }

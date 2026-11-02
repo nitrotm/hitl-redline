@@ -23,9 +23,3 @@ export const DEVICES: Device[] = [
 export function deviceOf(id: string | undefined): Device | undefined {
   return DEVICES.find((d) => d.id === id)
 }
-
-export function deviceOptions(selected: string | undefined): string {
-  return [{ id: WINDOW, label: 'This window' }, ...DEVICES]
-    .map((d) => `<option value="${d.id}"${d.id === (selected ?? WINDOW) ? ' selected' : ''}>${d.label}</option>`)
-    .join('')
-}

@@ -50,9 +50,10 @@ its profile as a temporary add-on, each time.
 ## Use
 
 In a project, run `/redline` (or `/redline http://localhost:5173/`). Claude opens the preview,
-and the Redline toolbar shows up on the page.
+and Redline starts on it. Open the sidebar with the Redline button of the browser's toolbar: the
+live page itself shows nothing of Redline.
 
-A screenshot comes first: <kbd>Ctrl</kbd>+<kbd>S</kbd>, or the toolbar's **Screenshot**. It covers the page,
+A screenshot comes first: <kbd>Ctrl</kbd>+<kbd>S</kbd> on the page, or the sidebar's **Take a screenshot**. It covers the page,
 frozen, and you draw on it. Each mark opens a comment box at once: type, <kbd>Enter</kbd>
 saves. Double-click a mark or its number, whatever the tool, to edit its comment again: all of it selected, to type over it. The box's trash icon deletes the mark.
 
@@ -72,9 +73,11 @@ The tools and colors go by their places on the keyboard, not their letters: the 
 row under the digits whatever the layout (A Z E R on AZERTY). While Redline is on,
 <kbd>Ctrl</kbd>+<kbd>S</kbd> is its screenshot, not the browser's Save Page.
 
-The toolbar's ✕ leaves the screenshot, back to the live page, where the next one is taken; its grip moves it out of the way.
+While a screenshot is shown, a toolbar on it has the tools, the colors, undo and delete. Its ✕
+leaves the screenshot, back to the live page, where the next one is taken; its grip moves it out
+of the way.
 
-To see the responsive layouts, pick a device in the toolbar's dropdown (or the sidebar's) before
+To see the responsive layouts, pick a device in the sidebar's dropdown before
 the screenshot: Phone (iPhone 15, 393×852), Tablet (iPad Air, 820×1180), Laptop 14″ FHD
 (1536×864) or Desktop 4K (2560×1440), in CSS pixels; `packages/extension/src/devices.ts` has
 them. The page shows in a frame of that size, scaled down when the window is smaller, and the

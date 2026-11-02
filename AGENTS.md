@@ -84,8 +84,8 @@ nix flake check         # builds the workspace: typecheck and tests included
    sandbox that forbids them (Claude Code's) makes Chromium abort and geckodriver fail.
 3. By hand, with the firefox-devtools MCP: serve `e2e-fixtures` (`node e2e-fixtures/serve.mjs`),
    run `redline wait --url http://127.0.0.1:47391/` in the background, `install_extension` with
-   `packages/extension/.output/firefox-mv2` (`type: "path"`), then open the page: the toolbar
-   shows up by itself. `redline status` prints the sidebar's URL. Add
+   `packages/extension/.output/firefox-mv2` (`type: "path"`), then open the page: Redline starts
+   on it by itself (`<redline-overlay>` in the page; nothing shows until a screenshot). `redline status` prints the sidebar's URL. Add
    `?url=http://127.0.0.1:47391/` to it to open it in a tab, following that page.
 
 ## Gotchas

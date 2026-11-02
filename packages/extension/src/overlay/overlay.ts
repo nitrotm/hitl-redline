@@ -1,6 +1,6 @@
 import type { Annotation, Point, Snapshot } from '@redline/shared'
 
-import { deviceOf, deviceOptions } from '../devices.ts'
+import { deviceOf } from '../devices.ts'
 import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, rectFromCorners, strokesPath, translate } from '../geometry.ts'
 import { type ContentRequest, type NewAnnotation, type PreparedCapture, send } from '../messages.ts'
 import { type Session, type Tool, currentSnapshot } from '../state/session.ts'
@@ -8,8 +8,9 @@ import { targetAt } from '../target-hint.ts'
 import { mountDeviceFrame } from './device-frame.ts'
 import { OVERLAY_CSS } from './style.ts'
 
-// The overlay, in a shadow root that the page's styles cannot reach. On the live page, it is a
-// toolbar whose first button takes a screenshot. Once taken, the screenshot covers the page,
+// The overlay, in a shadow root that the page's styles cannot reach. On the live page, it shows
+// nothing (the sidebar has the device and the screenshot), but the page as a device, and listens
+// for Ctrl+S, a screenshot. Once taken, the screenshot covers the page,
 // frozen, and the marks go on it: an SVG whose coordinates are the screenshot's, moved by its
 // scroll, so a mark is stored in page coordinates. What is drawn goes to the background, and
 // comes back through storage.
@@ -58,10 +59,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     </div>
     <div class="toolbar live">
       <span class="grip" title="Move the toolbar">${ICONS.grip}</span>
-      <select class="device-select" title="Show the page as a device">${deviceOptions(initial.device)}</select>
-      <button data-action="capture" class="capture" title="Take a screenshot to annotate (Ctrl+S)">${ICONS.camera}<span class="label">Screenshot</span></button>
       <span class="annotating">
-        <span class="sep"></span>
         <button data-tool="select" title="Select and move (1)">${ICONS.select}</button>
         <button data-tool="rect" title="Rectangle (2)">${ICONS.rect}</button>
         <button data-tool="arrow" title="Arrow: from where it starts to what it points at (3)">${ICONS.arrow}</button>
@@ -96,8 +94,6 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   const toast = root.querySelector<HTMLDivElement>('.toast')!
   const win = doc.defaultView!
   const deviceFrame = mountDeviceFrame(root.querySelector<HTMLDivElement>('.device')!, win)
-  const deviceSelect = root.querySelector<HTMLSelectElement>('.device-select')!
-  deviceSelect.addEventListener('change', () => void send({ type: 'ui/set', device: deviceSelect.value }).catch(report))
 
   let session = initial
   let snapshot: Snapshot | undefined
@@ -144,7 +140,6 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
 
     toolbar.classList.toggle('live', !snapshot)
     deviceFrame.show(deviceOf(session.device))
-    deviceSelect.value = session.device
     frozen.hidden = !snapshot
     if (snapshot) {
       const { width, height, scrollX, scrollY } = snapshot.viewport
@@ -457,8 +452,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     // undo drops the strokes not added yet; the rest adds them first
     if (action === 'undo' && strokes) return dropStrokes()
     finishStrokes()
-    if (action === 'capture') capture()
-    else if (!snapshot) return
+    if (!snapshot) return
     else if (action === 'undo') void send({ type: 'annotation/undo' }).catch(report)
     else if (action === 'delete' && selected !== null) void send({ type: 'annotation/delete', id: selected }).catch(report)
     else if (action === 'close') void send({ type: 'snapshot/close' }).catch(report)
@@ -611,7 +605,6 @@ const ICONS = {
   grip: icon(
     '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'
   ),
-  camera: icon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
   select: icon('<path d="M5 3l14 8-6 2-3 6z"/>'),
   rect: icon('<rect x="4" y="5" width="16" height="14" rx="1"/>'),
   arrow: icon('<path d="M5 19L19 5"/><path d="M10 5h9v9"/>'),

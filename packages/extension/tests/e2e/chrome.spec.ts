@@ -38,7 +38,9 @@ test('screenshot, draw, comment and send a round', async () => {
   // Redline starts by itself on the preview of `redline wait --url`
   const page = await context.newPage()
   await page.goto(fixtures.url)
-  await expect(page.locator('redline-overlay .toolbar')).toBeVisible()
+  // on the live page, it shows nothing: the sidebar has the device and the screenshot
+  await expect(page.locator('redline-overlay')).toBeAttached()
+  await expect(page.locator('redline-overlay .toolbar')).toBeHidden()
   const button = (await page.locator('button.cta').first().boundingBox())!
 
   // a screenshot first: the page freezes under it
@@ -157,15 +159,18 @@ test('show the page as a phone, and capture it so', async () => {
   bridge = await startBridge(fixtures.url)
   const page = await context.newPage()
   await page.goto(fixtures.url)
-  await expect(page.locator('redline-overlay .toolbar')).toBeVisible()
+  await expect(page.locator('redline-overlay')).toBeAttached()
 
-  // the page, in a frame of the phone's size: its media queries are the phone's
-  await page.locator('redline-overlay .device-select').selectOption('phone')
+  // the page, in a frame of the phone's size, picked in the sidebar: its media queries are the phone's
+  const sidebar = await context.newPage()
+  await sidebar.goto(`chrome-extension://${extensionId}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)
+  await sidebar.locator('.device-picker').selectOption('phone')
+  await page.bringToFront()
   const frame = page.frameLocator('redline-overlay iframe')
   await expect(frame.locator('button.cta').first()).toBeVisible()
   expect(await frame.locator('body').evaluate(() => window.innerWidth)).toBe(393)
 
-  await page.locator('redline-overlay button[data-action="capture"]').click()
+  await page.keyboard.press('Control+s')
   const canvas = page.locator('redline-overlay .frozen svg')
   await expect(canvas).toBeVisible()
   const box = (await canvas.boundingBox())!
@@ -177,8 +182,6 @@ test('show the page as a phone, and capture it so', async () => {
   await page.keyboard.type('Too wide on a phone')
   await page.keyboard.press('Enter')
 
-  const sidebar = await context.newPage()
-  await sidebar.goto(`chrome-extension://${extensionId}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)
   await expect(sidebar.locator('h2', { hasText: 'Phone (iPhone 15)' })).toBeVisible()
   await sidebar.getByRole('button', { name: /^Send to Claude/ }).click()
 

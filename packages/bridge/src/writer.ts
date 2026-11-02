@@ -1,7 +1,16 @@
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { type Annotation, type FeedbackRound, type Snapshot, type SnapshotWithImages, boundingBox } from '@redline/shared'
+import {
+  type Annotation,
+  type FeedbackRound,
+  type PathStep,
+  type Snapshot,
+  type SnapshotWithImages,
+  boundingBox,
+  commonPrefix,
+  pathText,
+} from '@redline/shared'
 
 // A round on disk, in .redline/rounds/NNN/: feedback.md for Claude (and a human) to read first,
 // feedback.json with all of it, and the screenshots of each snapshot, S1.annotated.png and
@@ -95,12 +104,20 @@ function renderSnapshot(snapshot: SnapshotWithImages | Snapshot): string[] {
     `- Viewport: ${v.width}×${v.height} CSS px${snapshot.device ? `, as a ${snapshot.device}` : ''}, dpr ${Number(v.dpr.toFixed(2))}, scrolled to (${Math.round(v.scrollX)}, ${Math.round(v.scrollY)})`,
     '',
   ]
+  // what the marks' paths begin with, written once
+  const paths = snapshot.annotations.flatMap((a) => (a.target?.path?.length ? [a.target.path] : []))
+  const prefix = paths.length > 1 ? commonPrefix(paths) : []
+  const common = prefix.length >= MIN_COMMON ? prefix : []
+  if (common.length) lines.splice(lines.length - 1, 0, `- Common path of its marks: \`${pathText(common)}\``)
   if (snapshot.annotations.length === 0) lines.push('No annotations.', '')
-  for (const annotation of snapshot.annotations) lines.push(renderAnnotation(annotation, snapshot), '')
+  for (const annotation of snapshot.annotations) lines.push(renderAnnotation(annotation, snapshot, common), '')
   return lines
 }
 
-function renderAnnotation(annotation: Annotation, snapshot: Snapshot): string {
+// fewer steps in common than this are written in full in each path
+const MIN_COMMON = 2
+
+function renderAnnotation(annotation: Annotation, snapshot: Snapshot, common: PathStep[]): string {
   // in the screenshot: the page's coordinates, less the scroll it was taken at
   const at = (p: { x: number; y: number }) => `(${Math.round(p.x - snapshot.viewport.scrollX)}, ${Math.round(p.y - snapshot.viewport.scrollY)})`
   let where: string
@@ -111,7 +128,15 @@ function renderAnnotation(annotation: Annotation, snapshot: Snapshot): string {
   }
   const target = annotation.target ? ` on \`${annotation.target.selector}\`${annotation.target.text ? ` "${oneLine(annotation.target.text, 60)}"` : ''}` : ''
   const comment = annotation.comment.trim() ? `\n\n${quote(annotation.comment, '  ')}` : ' (no comment)'
-  return `- **#${annotation.id}** ${where}${target}${comment}`
+  return `- **#${annotation.id}** ${where}${target}${renderPath(annotation.target?.path, common)}${comment}`
+}
+
+// the path from under <body>, after the common path of the snapshot's marks when there is one
+function renderPath(path: PathStep[] | undefined, common: PathStep[]): string {
+  if (!path?.length) return ''
+  if (!common.length) return `\n  - Path: \`${pathText(path)}\``
+  const rest = path.slice(common.length)
+  return `\n  - Path: \`${rest.length ? `… > ${pathText(rest)}` : '… (the common path)'}\``
 }
 
 function quote(text: string, indent = ''): string {

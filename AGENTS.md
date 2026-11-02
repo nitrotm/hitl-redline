@@ -50,6 +50,10 @@ nix flake check         # builds the workspace: typecheck and tests included
 - **A device** (`src/devices.ts`, `session.device`) shows the page in a same-origin iframe of
   its size (`src/overlay/device-frame.ts`); the capture is cropped to that frame, and the
   snapshot's viewport is the device's.
+- **A mark's target** (`src/target-hint.ts`) is the element it points at: a short unique
+  selector, its text, and its path from under `<body>` (`PathStep`s, through shadow roots). The
+  writer prints paths compact (`packages/shared/src/path.ts`): `button.cta[1/2]`, `div ×3`, and
+  what a snapshot's marks have in common written once.
 - **Coordinates are the page's** (CSS px from the document's top left): the screenshot's, plus the
   scroll it was taken at. The writer turns them back into screenshot coordinates.
 - **The overlay, the sidebar's preview and the composite draw the same shapes**: `src/geometry.ts`

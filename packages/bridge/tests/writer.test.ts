@@ -52,3 +52,28 @@ describe('writeRound', () => {
     expect(json.snapshots[0].images).toEqual({ clean: 'S1.clean.png', annotated: 'S1.annotated.png' })
   })
 })
+
+describe('paths', () => {
+  it('write what the marks have in common once, and the rest after it', () => {
+    const round = makeRound()
+    const [one, two] = round.snapshots[0]!.annotations
+    const hero = [
+      { tag: 'main', id: 'app' },
+      { tag: 'section', classes: ['hero'] },
+    ]
+    one!.target = { selector: 'button.cta', tag: 'button', text: 'Sign up', path: [...hero, { tag: 'button', classes: ['cta'], nth: 1, of: 2 }] }
+    two!.target = { selector: 'h2', tag: 'h2', text: 'Welcome', path: [...hero, { tag: 'h2' }] }
+    const md = renderFeedback(round)
+    expect(md).toContain('- Common path of its marks: `main#app > section.hero`')
+    expect(md).toContain('  - Path: `… > button.cta[1/2]`')
+    expect(md).toContain('  - Path: `… > h2`')
+  })
+
+  it('are written in full when one mark has one', () => {
+    const round = makeRound()
+    round.snapshots[0]!.annotations[0]!.target = { selector: 'h2', tag: 'h2', text: '', path: [{ tag: 'main' }, { tag: 'div' }, { tag: 'div' }, { tag: 'h2' }] }
+    const md = renderFeedback(round)
+    expect(md).not.toContain('Common path')
+    expect(md).toContain('  - Path: `main > div ×2 > h2`')
+  })
+})

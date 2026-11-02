@@ -77,6 +77,8 @@ export async function expectRound(bridge: Bridge, expect: typeof import('@playwr
   const md = await readFile(join(round, 'feedback.md'), 'utf8')
   expect(md).toContain('**#1** rectangle')
   expect(md).toContain('> Make the button bigger')
+  // the path from under <body>, the button the first of two
+  expect(md).toContain('button.cta[1/2]`')
   expect(md).toContain('**#2** arrow from')
   expect(md).toContain('> Too much empty space here')
   expect(md).toContain('> Round 1, overall')

@@ -17,11 +17,31 @@ export const Rect = z.object({
 })
 export type Rect = z.infer<typeof Rect>
 
+// A step of the path to an element, from under <body> down to it: what names the element among
+// its siblings and in the sources.
+export const PathStep = z.object({
+  tag: z.string(),
+  id: z.string().optional(),
+  // the first two that read like names, not generated ones
+  classes: z.array(z.string()).optional(),
+  // data-testid, data-test or data-cy
+  testId: z.string().optional(),
+  role: z.string().optional(),
+  label: z.string().optional(),
+  // its rank among its siblings of the same tag, and their number, when there are several
+  nth: z.number().int().positive().optional(),
+  of: z.number().int().positive().optional(),
+  // the path goes on in its shadow root
+  shadow: z.boolean().optional(),
+})
+export type PathStep = z.infer<typeof PathStep>
+
 // the element under an annotation, for Claude to find it in the sources
 export const Target = z.object({
   selector: z.string(),
   tag: z.string(),
   text: z.string(),
+  path: z.array(PathStep).optional(),
 })
 export type Target = z.infer<typeof Target>
 

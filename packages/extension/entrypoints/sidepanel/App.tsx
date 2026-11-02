@@ -95,7 +95,8 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
         `${result.left} mark${result.left === 1 ? ' is' : 's are'} outside the view: scroll to ${result.left === 1 ? 'it' : 'them'}, and capture again.`
       )
   }
-  const canSend = session.snapshots.length > 0 || session.comment.trim() !== ''
+  // the marks on the page are captured on the way
+  const canSend = session.snapshots.length > 0 || session.draft.length > 0 || session.comment.trim() !== ''
 
   return (
     <div class="session">
@@ -141,10 +142,9 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
             Done
           </button>
         </div>
-        {session.draft.length > 0 && session.snapshots.length > 0 && !locked && (
+        {session.draft.length > 0 && !locked && (
           <p class="note">
-            {session.draft.length} mark{session.draft.length === 1 ? ' is' : 's are'} not captured: {session.draft.length === 1 ? 'it stays' : 'they stay'} on
-            the page.
+            {session.draft.length === 1 ? 'The mark' : `The ${session.draft.length} marks`} on the page will be captured as you send, if in view.
           </p>
         )}
         <div class="secondary">

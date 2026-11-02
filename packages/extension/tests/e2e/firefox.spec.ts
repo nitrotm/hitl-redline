@@ -37,7 +37,6 @@ test.afterAll(async () => {
 test('draw, comment, capture and send a round', async () => {
   bridge = await startBridge(fixtures.url)
   await driver.get(fixtures.url)
-  const page = await driver.getWindowHandle()
 
   // Redline starts by itself on the preview of `redline wait --url`
   const overlay = await driver.wait(until.elementLocated(By.css('redline-overlay')), 10_000)
@@ -73,7 +72,6 @@ test('draw, comment, capture and send a round', async () => {
 
   // comments, in the sidebar opened in a tab of its own
   await driver.switchTo().newWindow('tab')
-  const sidebar = await driver.getWindowHandle()
   await driver.get(`moz-extension://${UUID}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)
   await driver.wait(async () => (await driver.findElements(By.css('.marks textarea'))).length === 2, 10_000)
   const comments = await driver.findElements(By.css('.marks textarea'))
@@ -83,12 +81,7 @@ test('draw, comment, capture and send a round', async () => {
   await general.sendKeys('Round 1, overall')
   await driver.findElement(By.css('h1')).click()
 
-  // capture from the page, which must be the active tab
-  await driver.switchTo().window(page)
-  await driver.actions().sendKeys('c').perform()
-  await driver.switchTo().window(sidebar)
-  await driver.wait(until.elementLocated(By.css('.thumb img')), 10_000)
-
+  // no capture: Send captures the marks still on the page (Chrome's test captures with C)
   await driver.findElement(By.xpath('//button[normalize-space()="Send to Claude"]')).click()
   await expectRound(bridge, expect)
   await driver.wait(until.elementLocated(By.css('.note.sent')), 5_000)

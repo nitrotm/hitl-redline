@@ -106,10 +106,14 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
     }
     case 'comment/set':
       return change(tabId, (s) => ({ ...s, comment: request.comment }))
-    case 'round/submit':
+    case 'round/submit': {
+      // the marks still on the page go with it, in a last snapshot: those in view, as a capture takes
+      const session = required(await getSession(tabId))
+      if (session.active && session.draft.length > 0) await capture(tabId)
       await change(tabId, (s) => queueRound(s, request.status, new Date().toISOString()))
       await flush()
       return null
+    }
   }
 }
 

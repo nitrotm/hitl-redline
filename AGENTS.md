@@ -71,7 +71,9 @@ nix flake check         # builds the workspace: typecheck and tests included
 ## Testing a change
 
 1. `yarn test` and `yarn typecheck`.
-2. `yarn build`, then the end-to-end tests of the browser concerned.
+2. `yarn build`, then the end-to-end tests of the browser concerned. They run the built
+   extension (`.output/`), so build first. They start real browsers, which need Unix sockets: a
+   sandbox that forbids them (Claude Code's) makes Chromium abort and geckodriver fail.
 3. By hand, with the firefox-devtools MCP: serve `e2e-fixtures` (`node e2e-fixtures/serve.mjs`),
    run `redline wait --url http://127.0.0.1:47391/` in the background, `install_extension` with
    `packages/extension/.output/firefox-mv2` (`type: "path"`), then open the page: the toolbar
@@ -83,6 +85,9 @@ nix flake check         # builds the workspace: typecheck and tests included
 - Firefox builds **MV2** (`.output/firefox-mv2`), Chrome **MV3** (`.output/chrome-mv3`). MV2 grants
   host permissions at install. Firefox's MV3 would leave them to the user.
 - Reinstalling a temporary add-on loses its storage: the sessions, and the marks on the page.
+- Firefox captures with `tabs.captureTab`, the tab itself, shown or not. Chrome has only
+  `captureVisibleTab`, so there the tab must be the shown one (the end-to-end tests bring it to
+  the front).
 - After a change of `yarn.lock`: update the `hash` of `fetchYarnBerryDeps` in `nix/workspace.nix`
   (nix prints the one it got), and `nix/missing-hashes.json` if needed
   (`yarn-berry-fetcher missing-hashes yarn.lock`).

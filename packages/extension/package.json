@@ -8,7 +8,10 @@
     "dev:chrome": "wxt",
     "build": "wxt build -b firefox && wxt build",
     "typecheck": "wxt prepare && run -T tsc -p .",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "test:e2e": "playwright test",
+    "test:e2e:chrome": "playwright test tests/e2e/chrome",
+    "test:e2e:firefox": "playwright test tests/e2e/firefox"
   },
   "dependencies": {
     "@redline/shared": "workspace:^",

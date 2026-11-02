@@ -163,14 +163,15 @@ function tell<T>(tabId: number, request: ContentRequest): Promise<T> {
 // snapshot.
 async function capture(tabId: number): Promise<CaptureResult> {
   const tab = await browser.tabs.get(tabId)
-  if (!tab.active) throw new Error('the tab must be the active one of its window to be captured')
+  const captureTab = firefoxCaptureTab()
+  if (!captureTab && !tab.active) throw new Error('the tab must be the active one of its window to be captured')
 
   return update(tabId, async (s) => {
     const session = required(s)
     const prepared = await tell<PreparedCapture>(tabId, { type: 'capture/prepare' })
     let clean: string
     try {
-      clean = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' })
+      clean = captureTab ? await captureTab(tabId, { format: 'png' }) : await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' })
     } finally {
       await tell(tabId, { type: 'capture/restore' })
     }
@@ -180,6 +181,11 @@ async function capture(tabId: number): Promise<CaptureResult> {
     await putImages(session.id, snapshot.id, { clean, annotated })
     return [next, { snapshotId: snapshot.id, captured: snapshot.annotations.length, left: next.draft.length }]
   })
+}
+
+// Firefox's: the tab itself, shown or not (Chrome has only the shown tab of a window)
+function firefoxCaptureTab() {
+  return (browser.tabs as unknown as { captureTab?: (tabId: number, options: { format: 'png' }) => Promise<string> }).captureTab
 }
 
 let flushing = false

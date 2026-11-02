@@ -66,7 +66,7 @@ describe('waitForRound', () => {
   it('refuses an invalid round, and keeps waiting', async () => {
     const { port, received } = await listen()
     expect((await post(port, '{')).status).toBe(400)
-    const invalid = await post(port, JSON.stringify({ ...makeRound(), version: 2 }))
+    const invalid = await post(port, JSON.stringify({ ...makeRound(), version: 1 }))
     expect(invalid.status).toBe(400)
     expect(JSON.parse(invalid.body).error).toBe('invalid round')
     expect((await post(port, JSON.stringify(makeRound()))).status).toBe(200)

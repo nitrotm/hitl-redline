@@ -1,7 +1,7 @@
 import type { Annotation, Point, Snapshot } from '@redline/shared'
 
 import { deviceOf, deviceOptions } from '../devices.ts'
-import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, freehandPath, rectFromCorners, translate } from '../geometry.ts'
+import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, rectFromCorners, strokesPath, translate } from '../geometry.ts'
 import { type ContentRequest, type NewAnnotation, type PreparedCapture, send } from '../messages.ts'
 import { type Session, type Tool, currentSnapshot } from '../state/session.ts'
 import { targetAt } from '../target-hint.ts'
@@ -18,6 +18,8 @@ const SVG = 'http://www.w3.org/2000/svg'
 const MIN_SIZE = 4
 // an arrow shorter than this is a slip
 const MIN_ARROW = 12
+// a pen stroke started this soon after the last one ended is part of the same mark
+const STROKE_GAP_MS = 500
 // how far from a mark's box a double click still hits it
 const HIT = 6
 // by the keys' places (KeyboardEvent.code), whatever the layout: the tools on 1 to 4, the colors
@@ -107,8 +109,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   let gesture:
     | { kind: 'rect'; from: Point; to: Point }
     | { kind: 'arrow'; from: Point; to: Point }
-    | { kind: 'freehand'; points: Point[] }
-    | { kind: 'move'; id: number; from: Point; dx: number; dy: number }
+    | { kind: 'freehand'; strokes: Point[][] }
+    // ALREADY: the mark was selected before: a click without a move unselects it
+    | { kind: 'move'; id: number; from: Point; dx: number; dy: number; already: boolean }
     | null = null
   // the mark whose comment the popover edits: NEW, a mark drawn whose id has not come yet
   let editing: number | null = null
@@ -116,6 +119,8 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   let unsaved: string | undefined
   // a NEW mark deleted before its id came: deleted once it comes
   let deleteOnAdd = false
+  // the strokes of a pen mark, drawn and waiting for another (STROKE_GAP_MS) before it is added
+  let strokes: { list: Point[][]; timer: ReturnType<typeof setTimeout> } | null = null
 
   // a pointer's position, in the page's coordinates of the snapshot: the screenshot's, scaled to
   // the window, plus the scroll it was taken at
@@ -166,13 +171,27 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     }, report)
   }
 
+  // The marks' elements, kept from one drawing to the next while a mark's shape and color stay: a
+  // selection only changes a class, so the element under the pointer stays the same between the
+  // two clicks of a double click.
+  const elements = new Map<number, { g: SVGGElement; key: string }>()
   function drawShapes() {
-    shapes.replaceChildren(
-      ...(snapshot?.annotations ?? []).map((annotation) => {
-        const moved = gesture?.kind === 'move' && gesture.id === annotation.id ? translate(annotation, gesture.dx, gesture.dy) : annotation
-        return shapeElement(moved, { selected: annotation.id === selected, highlighted: annotation.id === highlighted })
-      })
-    )
+    const marks = (snapshot?.annotations ?? []).map((annotation) => {
+      const moved = gesture?.kind === 'move' && gesture.id === annotation.id ? translate(annotation, gesture.dx, gesture.dy) : annotation
+      const { comment: _, target: __, ...shape } = moved
+      const key = JSON.stringify(shape)
+      let node = elements.get(moved.id)
+      if (node?.key !== key) {
+        node = { g: shapeElement(moved), key }
+        elements.set(moved.id, node)
+      }
+      node.g.classList.toggle('selected', moved.id === selected)
+      node.g.classList.toggle('highlighted', moved.id === highlighted)
+      return node.g
+    })
+    for (const id of elements.keys()) if (!marks.some((g) => g === elements.get(id)!.g)) elements.delete(id)
+    const children = [...shapes.children]
+    if (marks.length !== children.length || marks.some((g, i) => children[i] !== g)) shapes.replaceChildren(...marks)
   }
 
   function drawPreview() {
@@ -182,25 +201,34 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       preview.append(el('rect', { x: r.x, y: r.y, width: r.width, height: r.height, class: 'rect', stroke: session.color }))
     } else if (gesture?.kind === 'arrow') {
       preview.append(el('path', { d: arrowPath(gesture.from, gesture.to), class: 'stroke', fill: session.color }))
-    } else if (gesture?.kind === 'freehand') {
-      preview.append(el('path', { d: freehandPath(gesture.points), class: 'stroke', fill: session.color }))
+    } else if (gesture?.kind === 'freehand' || strokes) {
+      const list = gesture?.kind === 'freehand' ? gesture.strokes : strokes!.list
+      preview.append(el('path', { d: strokesPath(list), class: 'stroke', fill: session.color }))
     }
   }
 
   svg.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !snapshot) return
+    if (session.tool !== 'freehand') finishStrokes()
     if (editing !== null) closePopover(true)
     const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
-    if (session.tool === 'select') {
+    // a mark, whatever the tool, is selected as with the select tool (and moved, if dragged)
+    if (session.tool === 'select' || shape) {
+      if (shape) finishStrokes()
+      const already = shape !== null && Number(shape.dataset.id) === selected
       selected = shape ? Number(shape.dataset.id) : null
-      if (selected !== null) gesture = { kind: 'move', id: selected, from: page(e), dx: 0, dy: 0 }
+      if (selected !== null) gesture = { kind: 'move', id: selected, from: page(e), dx: 0, dy: 0, already }
       if (selected !== (session.selected ?? null)) void send({ type: 'annotation/select', id: selected }).catch(report)
       drawShapes()
       if (!gesture) return
     } else if (session.tool === 'rect' || session.tool === 'arrow') {
       gesture = session.tool === 'rect' ? { kind: 'rect', from: page(e), to: page(e) } : { kind: 'arrow', from: page(e), to: page(e) }
     } else {
-      gesture = { kind: 'freehand', points: [page(e)] }
+      // soon after the last stroke: the same mark
+      const previous = strokes?.list ?? []
+      if (strokes) clearTimeout(strokes.timer)
+      strokes = null
+      gesture = { kind: 'freehand', strokes: [...previous, [page(e)]] }
     }
     svg.setPointerCapture(e.pointerId)
     e.preventDefault()
@@ -211,8 +239,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     const p = page(e)
     if (gesture.kind === 'rect' || gesture.kind === 'arrow') gesture.to = p
     else if (gesture.kind === 'freehand') {
-      const last = gesture.points.at(-1)!
-      if (Math.hypot(p.x - last.x, p.y - last.y) >= 2) gesture.points.push(p)
+      const stroke = gesture.strokes.at(-1)!
+      const last = stroke.at(-1)!
+      if (Math.hypot(p.x - last.x, p.y - last.y) >= 2) stroke.push(p)
     } else {
       gesture.dx = p.x - gesture.from.x
       gesture.dy = p.y - gesture.from.y
@@ -231,9 +260,15 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
 
     if (done.kind === 'move') {
       const annotation = snapshot.annotations.find((a) => a.id === done.id)
-      if (!annotation || Math.hypot(done.dx, done.dy) < 1) return drawShapes()
+      if (!annotation || Math.hypot(done.dx, done.dy) < 1) {
+        if (done.already) {
+          selected = null
+          void send({ type: 'annotation/select', id: null }).catch(report)
+        }
+        return drawShapes()
+      }
       const moved = translate(annotation, done.dx, done.dy)
-      const patch = moved.kind === 'rect' ? { rect: moved.rect } : moved.kind === 'arrow' ? { from: moved.from, to: moved.to } : { points: moved.points }
+      const patch = moved.kind === 'rect' ? { rect: moved.rect } : moved.kind === 'arrow' ? { from: moved.from, to: moved.to } : { strokes: moved.strokes }
       // until the background's answer comes back through storage, it stays where it was dropped
       snapshot = { ...snapshot, annotations: snapshot.annotations.map((a) => (a.id === done.id ? moved : a)) }
       drawShapes()
@@ -241,22 +276,40 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       return
     }
 
-    let annotation: NewAnnotation
     if (done.kind === 'rect') {
       const rect = rectFromCorners(done.from, done.to)
-      if (rect.width < MIN_SIZE || rect.height < MIN_SIZE) return
-      annotation = { kind: 'rect', color: session.color, rect }
+      if (rect.width >= MIN_SIZE && rect.height >= MIN_SIZE) addDrawn({ kind: 'rect', color: session.color, rect })
     } else if (done.kind === 'arrow') {
-      if (Math.hypot(done.to.x - done.from.x, done.to.y - done.from.y) < MIN_ARROW) return
-      annotation = { kind: 'arrow', color: session.color, from: done.from, to: done.to }
+      if (Math.hypot(done.to.x - done.from.x, done.to.y - done.from.y) >= MIN_ARROW)
+        addDrawn({ kind: 'arrow', color: session.color, from: done.from, to: done.to })
     } else {
-      if (done.points.length < 2) return
-      annotation = { kind: 'freehand', color: session.color, points: done.points }
+      // the pen's mark waits for another stroke
+      strokes = { list: done.strokes, timer: setTimeout(finishStrokes, STROKE_GAP_MS) }
+      drawPreview()
     }
+  })
+
+  // The pen's mark, its strokes done: added. A click is a stroke too, a dot.
+  function finishStrokes() {
+    if (!strokes) return
+    clearTimeout(strokes.timer)
+    const list = strokes.list
+    strokes = null
+    preview.replaceChildren()
+    addDrawn({ kind: 'freehand', color: session.color, strokes: list })
+  }
+
+  function dropStrokes() {
+    if (strokes) clearTimeout(strokes.timer)
+    strokes = null
+    preview.replaceChildren()
+  }
+
+  function addDrawn(annotation: NewAnnotation) {
     const drawn = { ...annotation, id: NEW, comment: '' } as Annotation
     const target = targetOf(drawn)
     // drawn at once, and its comment open at once, to type into: its id comes from the background
-    shapes.append(shapeElement(drawn, { selected: false, highlighted: false }))
+    shapes.append(shapeElement(drawn))
     openPopover(drawn)
     send({ type: 'annotation/add', annotation: target ? { ...annotation, target } : annotation }).then((added) => {
       if (deleteOnAdd) {
@@ -275,7 +328,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       }
       unsaved = undefined
     }, report)
-  })
+  }
 
   svg.addEventListener('pointercancel', () => {
     gesture = null
@@ -283,9 +336,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     drawShapes()
   })
 
-  // A double click edits a mark's comment, whatever the tool: the mark under the pointer, or,
-  // marks not taking the pointer while a drawing tool is on, the last drawn whose box, or badge,
-  // is there (a double click draws nothing: too small).
+  // A double click edits a mark's comment, whatever the tool: the mark under the pointer, or the
+  // last drawn whose box, or badge, is there (a rectangle's inside takes the pointer only with the
+  // select tool). With the pen, its clicks may have been dots: dropped.
   svg.addEventListener('dblclick', (e) => {
     if (!snapshot) return
     const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
@@ -294,7 +347,10 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       p.x >= box.x - HIT && p.x <= box.x + box.width + HIT && p.y >= box.y - HIT && p.y <= box.y + box.height + HIT
     const near = (a: Annotation) => within(boundingBox(a)) || within(badgeFor(a))
     const annotation = shape ? snapshot.annotations.find((a) => a.id === Number(shape.dataset.id)) : snapshot.annotations.findLast(near)
-    if (annotation) openPopover(annotation, true)
+    if (!annotation) return
+    // the double click's own clicks drew the pen's dots: not a mark
+    if (session.tool === 'freehand') dropStrokes()
+    openPopover(annotation, true)
   })
 
   // the screenshot does not scroll: the page under it must not either
@@ -385,17 +441,22 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   })
 
   function setTool(tool: Tool) {
+    finishStrokes()
     if (snapshot) void send({ type: 'ui/set', tool }).catch(report)
   }
 
   function setColor(color: string) {
     if (!snapshot) return
+    finishStrokes()
     void send({ type: 'ui/set', color }).catch(report)
     // the selected mark takes it too
     if (selected !== null) void send({ type: 'annotation/update', id: selected, patch: { color } }).catch(report)
   }
 
   function act(action: string | undefined) {
+    // undo drops the strokes not added yet; the rest adds them first
+    if (action === 'undo' && strokes) return dropStrokes()
+    finishStrokes()
     if (action === 'capture') capture()
     else if (!snapshot) return
     else if (action === 'undo') void send({ type: 'annotation/undo' }).catch(report)
@@ -404,6 +465,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   }
 
   function capture() {
+    finishStrokes()
     if (editing !== null) closePopover(true)
     void send({ type: 'snapshot/capture' }).then((r) => notify(`${r.snapshotId}: draw on the screenshot, then comment each mark; Ctrl+S for another`), report)
   }
@@ -419,6 +481,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     }
     const target = e.composedPath()[0] as HTMLElement | undefined
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+    // typed as the pen's strokes wait: the mark is done, and the key goes to its comment, which
+    // has the focus by now
+    if (strokes && !e.ctrlKey && e.key.length === 1) return finishStrokes()
     const key = e.key.toLowerCase()
     const color = COLOR_KEYS.indexOf(e.code as (typeof COLOR_KEYS)[number])
     let handled = true
@@ -505,8 +570,8 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   }
 }
 
-function shapeElement(annotation: Annotation, state: { selected: boolean; highlighted: boolean }): SVGGElement {
-  const g = el('g', { class: `mark${state.selected ? ' selected' : ''}${state.highlighted ? ' highlighted' : ''}`, 'data-id': annotation.id })
+function shapeElement(annotation: Annotation): SVGGElement {
+  const g = el('g', { class: 'mark', 'data-id': annotation.id })
   if (annotation.kind === 'rect') {
     const { x, y, width, height } = annotation.rect
     g.append(

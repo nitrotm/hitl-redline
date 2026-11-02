@@ -5,7 +5,7 @@ export const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAA
 
 export function makeRound(overrides: Partial<FeedbackRound> = {}): FeedbackRound {
   return {
-    version: 1,
+    version: 2,
     sessionId: 'session-1',
     round: 1,
     status: 'feedback',
@@ -32,10 +32,12 @@ export function makeRound(overrides: Partial<FeedbackRound> = {}): FeedbackRound
             kind: 'freehand',
             color: '#e11d48',
             comment: '',
-            points: [
-              { x: 10, y: 420 },
-              { x: 60, y: 480 },
-              { x: 30, y: 450 },
+            strokes: [
+              [
+                { x: 10, y: 420 },
+                { x: 60, y: 480 },
+              ],
+              [{ x: 30, y: 450 }],
             ],
           },
         ],

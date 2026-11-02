@@ -3,7 +3,7 @@ import type { Annotation, Point, Rect } from './schema.ts'
 export function boundingBox(annotation: Annotation): Rect {
   if (annotation.kind === 'rect') return annotation.rect
   if (annotation.kind === 'arrow') return boundsOf([annotation.from, annotation.to])
-  return boundsOf(annotation.points)
+  return boundsOf(annotation.strokes.flat())
 }
 
 export function boundsOf(points: Point[]): Rect {

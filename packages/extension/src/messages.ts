@@ -9,7 +9,7 @@ export type NewAnnotation = Annotation extends infer A ? (A extends Annotation ?
 export type AnnotationPatch = { comment?: string; color?: string; target?: Target } & (
   | { rect?: Extract<Annotation, { kind: 'rect' }>['rect'] }
   | { from?: Extract<Annotation, { kind: 'arrow' }>['from']; to?: Extract<Annotation, { kind: 'arrow' }>['to'] }
-  | { points?: Extract<Annotation, { kind: 'freehand' }>['points'] }
+  | { strokes?: Extract<Annotation, { kind: 'freehand' }>['strokes'] }
 )
 
 export type Request =

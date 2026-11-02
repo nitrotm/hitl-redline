@@ -26,8 +26,12 @@ export const OVERLAY_CSS = `
 .canvas[data-tool="arrow"] { cursor: ${ARROW}; }
 .canvas[data-tool="freehand"] { cursor: ${PENCIL}; }
 .canvas[data-tool="select"] { cursor: default; }
-.mark { pointer-events: none; }
-.canvas[data-tool="select"] .mark { pointer-events: auto; cursor: move; }
+/* a mark takes the pointer whatever the tool: a click selects it; with a drawing tool, by its
+   outline and its badge only, so that a rectangle may be drawn inside another */
+.mark { pointer-events: auto; cursor: move; }
+.canvas:not([data-tool="select"]) rect.hit { fill: none; }
+/* what is being drawn never takes the pointer: a double click stays on the screenshot */
+.preview { pointer-events: none; }
 .hit { fill: transparent; stroke: transparent; stroke-width: 14; }
 .rect { fill: none; stroke-width: ${RECT_STROKE}; }
 .halo { fill: none; stroke: rgba(255, 255, 255, 0.9); stroke-width: ${RECT_STROKE}; }

@@ -27,7 +27,7 @@ export function translate(annotation: Annotation, dx: number, dy: number): Annot
   if (annotation.kind === 'rect') return { ...annotation, rect: { ...annotation.rect, x: annotation.rect.x + dx, y: annotation.rect.y + dy } }
   if (annotation.kind === 'arrow')
     return { ...annotation, from: { x: annotation.from.x + dx, y: annotation.from.y + dy }, to: { x: annotation.to.x + dx, y: annotation.to.y + dy } }
-  return { ...annotation, points: annotation.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
+  return { ...annotation, strokes: annotation.strokes.map((stroke) => stroke.map((p) => ({ x: p.x + dx, y: p.y + dy }))) }
 }
 
 // the outline of a freehand stroke, as an SVG path (canvas draws it with Path2D)
@@ -58,9 +58,14 @@ export function arrowPath(from: Point, to: Point): string {
   return `M${[...shaft, at(base, wing), `${to.x.toFixed(1)},${to.y.toFixed(1)}`, at(base, -wing), ...back].join('L')}Z`
 }
 
+// the strokes of a freehand mark, each outlined, as one path
+export function strokesPath(strokes: Point[][]): string {
+  return strokes.map(freehandPath).join('')
+}
+
 // the path of a filled mark: an arrow, or a freehand stroke (a rectangle is a stroked rect)
 export function fillPath(annotation: Exclude<Annotation, { kind: 'rect' }>): string {
-  return annotation.kind === 'arrow' ? arrowPath(annotation.from, annotation.to) : freehandPath(annotation.points)
+  return annotation.kind === 'arrow' ? arrowPath(annotation.from, annotation.to) : strokesPath(annotation.strokes)
 }
 
 export interface Badge {

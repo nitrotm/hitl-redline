@@ -96,7 +96,7 @@ describe('rounds', () => {
   it('are built from the session, with the screenshots', () => {
     const images = new Map([['S1', { clean: 'data:image/png;base64,AA', annotated: 'data:image/png;base64,BB' }]])
     const round = buildRound({ ...queueRound(drawn(10), 'feedback', 'now'), comment: 'tighter' }, images)
-    expect(round).toMatchObject({ version: 1, sessionId: 'session-1', round: 1, status: 'feedback', comment: 'tighter' })
+    expect(round).toMatchObject({ version: 2, sessionId: 'session-1', round: 1, status: 'feedback', comment: 'tighter' })
     expect(round.snapshots[0]!.images.annotated).toBe('data:image/png;base64,BB')
   })
 

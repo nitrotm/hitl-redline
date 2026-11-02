@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { arrowPath, badgeFor, boundingBox, freehandPath, rectFromCorners, translate } from '../../src/geometry.ts'
+import { arrowPath, badgeFor, boundingBox, freehandPath, rectFromCorners, strokesPath, translate } from '../../src/geometry.ts'
 
 const base = { id: 1, color: '', comment: '' }
 
@@ -9,16 +9,19 @@ describe('geometry', () => {
     expect(rectFromCorners({ x: 50, y: 40 }, { x: 10, y: 100 })).toEqual({ x: 10, y: 40, width: 40, height: 60 })
   })
 
-  it('bounds a freehand mark, and an arrow', () => {
+  it('bounds a freehand mark of two strokes, and an arrow', () => {
     const mark = {
       ...base,
       kind: 'freehand' as const,
-      points: [
-        { x: 5, y: 9 },
-        { x: 15, y: 3 },
-        { x: 10, y: 20 },
+      strokes: [
+        [
+          { x: 5, y: 9 },
+          { x: 15, y: 3 },
+        ],
+        [{ x: 10, y: 20 }],
       ],
     }
+    expect(strokesPath(mark.strokes).match(/M/g)).toHaveLength(2)
     expect(boundingBox(mark)).toEqual({ x: 5, y: 3, width: 10, height: 17 })
     expect(boundingBox(translate(mark, 10, -3))).toEqual({ x: 15, y: 0, width: 10, height: 17 })
     const arrow = { ...base, kind: 'arrow' as const, from: { x: 50, y: 10 }, to: { x: 10, y: 40 } }

@@ -77,22 +77,45 @@ test('screenshot, draw, comment and send a round', async () => {
 
   // a double click on #2's badge does the same, the pen now the tool
   await page.keyboard.press('4')
+  await expect(page.locator('redline-overlay svg[data-tool="freehand"]')).toHaveCount(1)
+  await expect(page.locator('redline-overlay text', { hasText: '#2' })).toBeVisible()
   const badge = (await page.locator('redline-overlay text', { hasText: '#2' }).boundingBox())!
   await page.mouse.dblclick(badge.x + badge.width / 2, badge.y + badge.height / 2)
   await expect(popover).toBeFocused()
   await expect(popover).toHaveValue('Too much empty space here')
   await page.keyboard.press('Escape')
 
-  // a mark drawn by mistake, deleted from its comment box at once: #3 is gone, #1 and #2 stay
-  await page.mouse.move(900, 600)
-  await page.mouse.down()
-  await page.mouse.move(980, 650, { steps: 4 })
-  await page.mouse.up()
+  // two pen strokes, one soon after the other: one mark, its comment typed at once
+  for (const [x, y] of [
+    [900, 600],
+    [900, 650],
+  ] as const) {
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 80, y, { steps: 4 })
+    await page.mouse.up()
+  }
+  await page.keyboard.type('Two strokes')
   await expect(popover).toBeFocused()
+  await expect(popover).toHaveValue('Two strokes')
+  const mark = page.locator('redline-overlay g.mark[data-id="3"]')
+  await expect(mark).toHaveCount(1)
+  expect((await mark.locator('path.stroke').getAttribute('d'))!.match(/M/g)).toHaveLength(2)
+  await expect(page.locator('redline-overlay g.mark[data-id="4"]')).toHaveCount(0)
+
+  // a mark drawn by mistake, deleted from its comment box: #3 is gone, #1 and #2 stay
   await page.locator('redline-overlay .popover .trash').click()
   await expect(popover).toBeHidden()
   await expect(page.locator('redline-overlay g.mark[data-id="3"]')).toHaveCount(0)
   await expect(page.locator('redline-overlay g.mark[data-id]:not([data-id="0"])')).toHaveCount(2)
+
+  // a click on a mark, the pen still the tool, selects it, as the select tool would; another, not
+  const one = (await page.locator('redline-overlay text', { hasText: '#1' }).boundingBox())!
+  await page.mouse.click(one.x + one.width / 2, one.y + one.height / 2)
+  await expect(page.locator('redline-overlay g.mark.selected[data-id="1"]')).toHaveCount(1)
+  await page.mouse.click(one.x + one.width / 2, one.y + one.height / 2)
+  await expect(page.locator('redline-overlay g.mark.selected')).toHaveCount(0)
+  await expect(page.locator('redline-overlay g.mark[data-id]')).toHaveCount(2)
 
   // the sidebar, opened in a tab of its own, has both, with their comments
   const sidebar = await context.newPage()
@@ -102,9 +125,15 @@ test('screenshot, draw, comment and send a round', async () => {
   await expect(comments.nth(0)).toHaveValue('Make the button bigger')
 
   // selected in the sidebar, selected on the page
-  await sidebar.locator('.marks li').first().click()
+  await sidebar.locator('.marks li .badge').first().click()
   await expect(sidebar.locator('.marks li.selected')).toHaveCount(1)
   await expect(page.locator('redline-overlay g.mark.selected[data-id="1"]')).toHaveCount(1)
+  // the screenshot annotated: its marks have a trash icon in the sidebar
+  await expect(sidebar.locator('.marks li .trash')).toHaveCount(2)
+  // clicked again, unselected, there and on the page
+  await sidebar.locator('.marks li .badge').first().click()
+  await expect(sidebar.locator('.marks li.selected')).toHaveCount(0)
+  await expect(page.locator('redline-overlay g.mark.selected')).toHaveCount(0)
 
   // the preview is a toggle: back to the live page, then the screenshot again
   const frozen = page.locator('redline-overlay .frozen')

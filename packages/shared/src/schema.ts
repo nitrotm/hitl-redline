@@ -3,7 +3,8 @@ import { z } from 'zod'
 // The contract between the extension and the bridge: what a round of feedback holds. A change
 // here changes the bridge's writer (packages/bridge/src/writer.ts) and its tests with it.
 
-export const SCHEMA_VERSION = 1
+// 2: a freehand mark has strokes, not points
+export const SCHEMA_VERSION = 2
 
 export const Point = z.object({ x: z.number(), y: z.number() })
 export type Point = z.infer<typeof Point>
@@ -37,7 +38,8 @@ const annotationBase = {
 export const RectAnnotation = z.object({ ...annotationBase, kind: z.literal('rect'), rect: Rect })
 // from where it starts to what it points at
 export const ArrowAnnotation = z.object({ ...annotationBase, kind: z.literal('arrow'), from: Point, to: Point })
-export const FreehandAnnotation = z.object({ ...annotationBase, kind: z.literal('freehand'), points: z.array(Point).min(2) })
+// its strokes: those drawn one soon after the other are one mark
+export const FreehandAnnotation = z.object({ ...annotationBase, kind: z.literal('freehand'), strokes: z.array(z.array(Point).min(1)).min(1) })
 export const Annotation = z.discriminatedUnion('kind', [RectAnnotation, ArrowAnnotation, FreehandAnnotation])
 export type Annotation = z.infer<typeof Annotation>
 export type AnnotationKind = Annotation['kind']

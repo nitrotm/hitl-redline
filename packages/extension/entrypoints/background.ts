@@ -92,11 +92,8 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
     case 'annotation/update':
       return change(tabId, (s) => updateAnnotation(s, request.id, request.patch))
     case 'annotation/select':
-      // selected, it is to be moved or deleted: the select tool
-      return change(tabId, (s) => {
-        const next = selectAnnotation(s, request.id)
-        return request.id === null ? next : { ...next, tool: 'select' }
-      })
+      // the tool stays: any of them moves a mark
+      return change(tabId, (s) => selectAnnotation(s, request.id))
     case 'annotation/delete':
       return change(tabId, (s) => deleteAnnotation(s, request.id))
     case 'annotation/undo':

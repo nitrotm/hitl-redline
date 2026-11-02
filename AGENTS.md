@@ -61,6 +61,8 @@ nix flake check         # builds the workspace: typecheck and tests included
 
 ## Rules
 
+- **The round's format is `SCHEMA_VERSION` 2**: a freehand mark has `strokes` (the pen's strokes
+  drawn 500 ms apart or less), not `points`.
 - **Mark ids (`#n`) and snapshot ids (`Sn`) are never reused in a session.** Claude and the user
   refer to marks by id across rounds.
 - **`packages/shared/src/schema.ts` is the contract.** A change there changes the writer

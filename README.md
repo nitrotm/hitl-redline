@@ -56,17 +56,17 @@ A screenshot comes first: <kbd>Ctrl</kbd>+<kbd>S</kbd>, or the toolbar's **Scree
 frozen, and you draw on it. Each mark opens a comment box at once: type, <kbd>Enter</kbd>
 saves. Double-click a mark or its number, whatever the tool, to edit its comment again: all of it selected, to type over it. The box's trash icon deletes the mark.
 
-| Key                                                 | Tool                                                  |
-| --------------------------------------------------- | ----------------------------------------------------- |
-| <kbd>Ctrl</kbd>+<kbd>S</kbd>                        | Take a screenshot (of the live page)                  |
-| <kbd>1</kbd>                                        | Select: move a mark, or select it                     |
-| <kbd>2</kbd>                                        | Rectangle                                             |
-| <kbd>3</kbd>                                        | Arrow: press where it starts, release where it points |
-| <kbd>4</kbd>                                        | Pen (freehand)                                        |
-| <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> | Colors (and the selected mark's)                      |
-| <kbd>Del</kbd>                                      | Delete the selected mark                              |
-| <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                    |
-| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                     |
+| Key                                                 | Tool                                                              |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd>                        | Take a screenshot (of the live page)                              |
+| <kbd>1</kbd>                                        | Select: move a mark, or select it                                 |
+| <kbd>2</kbd>                                        | Rectangle                                                         |
+| <kbd>3</kbd>                                        | Arrow: press where it starts, release where it points             |
+| <kbd>4</kbd>                                        | Pen: strokes 500 ms apart or less make one mark; a click is a dot |
+| <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> | Colors (and the selected mark's)                                  |
+| <kbd>Del</kbd>                                      | Delete the selected mark                                          |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                                |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                                 |
 
 The tools and colors go by their places on the keyboard, not their letters: the colors are the
 row under the digits whatever the layout (A Z E R on AZERTY). While Redline is on,
@@ -84,7 +84,11 @@ scaled: a 4K layout on a smaller screen is captured smaller.
 Click the Redline button of the browser's toolbar to open the sidebar. It lists the
 screenshots of the round, and the marks of each with their comment:
 
-- A mark selected in the sidebar is selected on the screenshot, and the other way round.
+- A mark selected in the sidebar is selected on the screenshot, and the other way round; clicked
+  again, unselected. On the screenshot, a click on a mark selects it whatever the tool, and a drag
+  moves it (a drawing tool catches a mark by its outline and its number, so a rectangle can still
+  be drawn inside another).
+- The marks of the screenshot being annotated have a trash icon, to delete them.
 - A click on a screenshot's preview shows it on the page, to mark more; another click goes back to
   the live page.
 - Write a comment on the round as a whole, then **Send to Claude**, or **Done** to end the loop.

@@ -298,7 +298,11 @@ function Mark({
       onMouseEnter={() => highlight(annotation.id)}
       onMouseLeave={() => highlight(null)}
       // selected here, it is selected on the page, its snapshot shown
-      onClick={() => !selected && !disabled && ask({ type: 'annotation/select', tabId, id: annotation.id })}
+      // a click on the row's own fields (its comment, its delete) leaves the selection be
+      onClick={(e) => {
+        if (disabled || (e.target as Element).closest('textarea, button')) return
+        void ask({ type: 'annotation/select', tabId, id: selected ? null : annotation.id })
+      }}
       // its comment, all of it selected, to type over it
       onDblClick={() => {
         const area = item.current?.querySelector('textarea')
@@ -320,17 +324,28 @@ function Mark({
           onSave={(comment) => ask({ type: 'annotation/update', tabId, id: annotation.id, patch: { comment } })}
         />
       </div>
-      <button
-        class="icon"
-        disabled={disabled}
-        title={`Delete #${annotation.id}`}
-        onClick={(e) => {
-          e.stopPropagation()
-          void ask({ type: 'annotation/delete', tabId, id: annotation.id })
-        }}>
-        ×
-      </button>
+      {/* deleted only while its screenshot is the one annotated, shown on the page */}
+      {current && (
+        <button
+          class="icon trash"
+          disabled={disabled}
+          title={`Delete #${annotation.id}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            void ask({ type: 'annotation/delete', tabId, id: annotation.id })
+          }}>
+          <TrashIcon />
+        </button>
+      )}
     </li>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+    </svg>
   )
 }
 

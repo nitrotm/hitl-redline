@@ -87,6 +87,10 @@ main {
   border-bottom: 1px solid var(--line);
 }
 
+p.capture {
+  margin: 0;
+}
+
 .capture-row {
   display: flex;
   flex-direction: column;
@@ -361,6 +365,35 @@ footer {
 
 .start .help {
   padding: 0;
+}
+
+.shortcuts {
+  border-collapse: collapse;
+  width: 100%;
+  line-height: 1.4;
+}
+
+.shortcuts td {
+  padding: 4px 0;
+  vertical-align: top;
+  border-top: 1px solid var(--line);
+}
+
+.shortcuts td:first-child {
+  white-space: nowrap;
+  padding-right: 12px;
+  width: 1%;
+}
+
+.shortcuts .combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+
+.shortcuts td:last-child {
+  color: var(--fg);
 }
 
 .note.sent {

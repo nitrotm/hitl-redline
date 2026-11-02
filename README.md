@@ -72,7 +72,7 @@ The tools and colors go by their places on the keyboard, not their letters: the 
 row under the digits whatever the layout (A Z E R on AZERTY). While Redline is on,
 <kbd>Ctrl</kbd>+<kbd>S</kbd> is its screenshot, not the browser's Save Page.
 
-The toolbar's ✕ leaves the screenshot, back to the live page; its grip moves it out of the way.
+The toolbar's ✕ leaves the screenshot, back to the live page, where the next one is taken; its grip moves it out of the way.
 
 To see the responsive layouts, pick a device in the toolbar's dropdown (or the sidebar's) before
 the screenshot: Phone (iPhone 15, 393×852), Tablet (iPad Air, 820×1180), Laptop 14″ FHD

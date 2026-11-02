@@ -467,17 +467,21 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   function capture() {
     finishStrokes()
     if (editing !== null) closePopover(true)
-    void send({ type: 'snapshot/capture' }).then((r) => notify(`${r.snapshotId}: draw on the screenshot, then comment each mark; Ctrl+S for another`), report)
+    void send({ type: 'snapshot/capture' }).then(
+      (r) => notify(`${r.snapshotId}: draw on the screenshot, then comment each mark; back to the page (✕) for another`),
+      report
+    )
   }
 
   function onKey(e: KeyboardEvent) {
     if (e.altKey || e.metaKey) return
     // a new screenshot, from wherever the focus is: Ctrl+S, the browser's Save Page otherwise, which
-    // yields to the page that takes it (S by its letter: a screenshot, on any layout)
+    // yields to the page that takes it (S by its letter: a screenshot, on any layout). Of the live
+    // page only: on a screenshot, nothing (but no Save Page either).
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault()
       e.stopPropagation()
-      return capture()
+      return snapshot ? undefined : capture()
     }
     const target = e.composedPath()[0] as HTMLElement | undefined
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return

@@ -58,7 +58,8 @@ export const OVERLAY_CSS = `
 .toolbar button:disabled { opacity: 0.35; cursor: default; background: none; }
 .toolbar button:focus-visible { outline: 2px solid #60a5fa; }
 .toolbar .capture { padding: 0 8px; }
-.toolbar:not(.live) .capture .label { display: none; }
+/* a screenshot is of the live page: not taken from a screenshot */
+.toolbar:not(.live) .capture { display: none; }
 .toolbar.live .capture { background: #e11d48; font-weight: 600; }
 .toolbar .device-select {
   font: inherit; color: inherit; background: #2a2b2f; border: 1px solid #3a3b40; border-radius: 7px; height: 30px; padding: 0 6px; margin-right: 2px; cursor: pointer;

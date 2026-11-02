@@ -1,3 +1,4 @@
+import { Fragment } from 'preact'
 import { useEffect, useErrorBoundary, useRef, useState } from 'preact/hooks'
 
 import type { Annotation, Snapshot, Status } from '@redline/shared'
@@ -82,17 +83,46 @@ function StatusBar({ status }: { status: Status | undefined }) {
   )
 }
 
+// the keys, one per row: a key's names are joined by +, keys side by side are alternatives
+const SHORTCUTS: [string[][], string][] = [
+  [[['Ctrl', 'S']], 'Take a screenshot of the live page, to draw on'],
+  [[['1']], 'Select and move a mark'],
+  [[['2']], 'Rectangle'],
+  [[['3']], 'Arrow, from its start to what it points at'],
+  [[['4']], 'Pen; strokes close in time make one mark'],
+  [[['Q'], ['W'], ['E'], ['R']], 'Colors, by place: the row under 1 to 4'],
+  [[['Ctrl', 'Z']], 'Undo the last mark'],
+  [[['Del']], 'Delete the selected mark'],
+  [[['Double-click']], "Edit a mark's comment"],
+  [[['Enter'], ['Esc']], 'Save, close the comment'],
+  [[['Alt', 'Shift', 'R']], 'Turn Redline on or off'],
+]
+
 function Help() {
   return (
     <div class="help">
-      <p>
-        <kbd>Ctrl</kbd>+<kbd>S</kbd> takes a screenshot of the page. Draw on it, then comment each mark as it is drawn.
-      </p>
-      <p>
-        <kbd>1</kbd> select and move · <kbd>2</kbd> rectangle · <kbd>3</kbd> arrow · <kbd>4</kbd> pen
-        <br />
-        <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> colors · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Del</kbd> delete
-      </p>
+      <p>Take a screenshot, draw on it, and comment each mark as you draw it.</p>
+      <table class="shortcuts">
+        <tbody>
+          {SHORTCUTS.map(([keys, what]) => (
+            <tr key={what}>
+              <td>
+                {keys.map((combo, i) => (
+                  <span key={i} class="combo">
+                    {combo.map((key, j) => (
+                      <Fragment key={key}>
+                        {j > 0 && '+'}
+                        <kbd>{key}</kbd>
+                      </Fragment>
+                    ))}
+                  </span>
+                ))}
+              </td>
+              <td>{what}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -142,16 +172,21 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
 
   return (
     <div class="session">
-      <div class="capture capture-row">
-        <DevicePicker tabId={tabId} session={session} ask={ask} disabled={locked} />
-        <button
-          class="primary"
-          disabled={locked}
-          onClick={() => ask({ type: 'snapshot/capture', tabId })}
-          title="A screenshot of the page, to annotate (Ctrl+S)">
-          Take a screenshot
-        </button>
-      </div>
+      {/* a screenshot is of the live page: while one is annotated, the way back to it */}
+      {session.current ? (
+        <p class="capture note">Annotating {session.current}. Click its preview again (or ✕ on the page) to go back to the page, and take another.</p>
+      ) : (
+        <div class="capture capture-row">
+          <DevicePicker tabId={tabId} session={session} ask={ask} disabled={locked} />
+          <button
+            class="primary"
+            disabled={locked}
+            onClick={() => ask({ type: 'snapshot/capture', tabId })}
+            title="A screenshot of the page, to annotate (Ctrl+S)">
+            Take a screenshot
+          </button>
+        </div>
+      )}
 
       {session.snapshots.length === 0 && <Help />}
       {session.snapshots.map((snapshot) => (

@@ -27,6 +27,23 @@ own after a round, nor ask whether to go on: waiting is the default, and a `redl
 background costs nothing. When the user writes to you in the terminal meanwhile, answer them and
 keep the wait running.
 
+## Speed
+
+**What counts is the time from the user's mark to its change showing in their browser.** Keep it
+as short as possible:
+
+- **One mark at a time**: apply the smallest change that does what its comment asks, make it
+  visible, then go on to the next. The user watches the page change as you go, rather than
+  waiting for all of it.
+- **Make each change visible at once**: with a dev server that hot reloads (Vite and the like),
+  the page updates by itself; otherwise reload it (`navigate_page`, same URL) after each change.
+- **Nothing slow between marks**: no builds, test runs or refactors on the way. Run the
+  project's checks once, after the visible changes, if they are quick; leave the rest for the end
+  of the session.
+- **The easy marks first**, when some need thought: the user sees progress while you work on the
+  hard ones. Ask (in the reply's questions) rather than stall on an unclear one.
+- **Short words**: the reply and what you write here are one line per mark.
+
 The browser is the one of the **firefox-devtools** MCP server: use its tools (`install_extension`,
 `new_page`, `navigate_page`, `list_pages`, `select_page`, `screenshot_page`).
 
@@ -73,7 +90,8 @@ When `redline wait` exits, its output ends with the path of `feedback.md`:
 
 Then:
 
-1. Apply the feedback in the code. Each comment belongs to a mark: find the element from its
+1. Apply the feedback in the code, **mark after mark, each made visible before the next** (see
+   Speed). Each comment belongs to a mark: find the element from its
    path (from under `<body>`; `…` is the snapshot's common path, `[1/2]` the first of two
    alike siblings, `div ×3` three nested divs), its selector and text, and from what the
    screenshot shows. With a Preact page in development, a mark also names the components that
@@ -99,8 +117,8 @@ src/Hero.tsx:42:7`): start there. A round may also hold **Answers to Claude's qu
    ask about the rest in `questions` (`mark` when it is about one), rather than guessing.
 
 4. Start `redline wait --url <preview URL> --reply .redline/reply.json` in the background,
-   **then** reload the page with `navigate_page` (same URL) so the user sees the changes. Wait
-   for the dev server's rebuild first if it has one.
+   **then** reload the page with `navigate_page` (same URL): the sidebar shows your reply, and the
+   page all of the changes (wait for the dev server's rebuild first if it has one).
 5. Say the same briefly here, one line per mark (`#3: padding 8 → 16px in Button.tsx`), and the
    questions. Then end your turn and wait again.
 

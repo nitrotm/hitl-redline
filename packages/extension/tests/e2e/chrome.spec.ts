@@ -211,7 +211,9 @@ test('show the page as a phone, and capture it so', async () => {
   await page.keyboard.press('Enter')
 
   await expect(sidebar.locator('h2', { hasText: 'Phone (iPhone 15)' })).toBeVisible()
-  await sidebar.getByRole('button', { name: /^Send to Claude/ }).click()
+  // sent with Ctrl+D, from the page
+  await page.bringToFront()
+  await page.keyboard.press('Control+d')
 
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)

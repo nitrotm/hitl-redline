@@ -67,6 +67,7 @@ saves. Double-click a mark or its number, whatever the tool, to edit its comment
 | <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> | Colors (and the selected mark's)                                  |
 | <kbd>Del</kbd>                                      | Delete the selected mark                                          |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                                |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd>                        | Send to Claude; Done when there is nothing to send                |
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                                 |
 
 The tools and colors go by their places on the keyboard, not their letters: the colors are the

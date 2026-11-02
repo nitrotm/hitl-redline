@@ -15,6 +15,7 @@ import {
   setAnswer,
   setTool,
   storeReply,
+  submitStatus,
   takeSnapshot,
   undo,
   updateAnnotation,
@@ -219,5 +220,15 @@ describe("Claude's reply", () => {
     const next = roundSent(queueRound(session, 'feedback', 'now'), '/d', 'later')
     expect(next.reply).toBeUndefined()
     expect(next.answers).toBeUndefined()
+  })
+})
+
+describe('submitStatus', () => {
+  it('sends the round when it has something, or Done', () => {
+    const empty = createSession(1, 's')
+    expect(submitStatus(empty)).toBe('done')
+    expect(submitStatus({ ...empty, comment: ' ' })).toBe('done')
+    expect(submitStatus({ ...empty, comment: 'Tighter' })).toBe('feedback')
+    expect(submitStatus(drawn())).toBe('feedback')
   })
 })

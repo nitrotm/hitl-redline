@@ -5,7 +5,7 @@ import { deviceOf } from '../devices.ts'
 import { TARGET_ATTRIBUTE } from '../frameworks.ts'
 import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, rectFromCorners, strokesPath, translate } from '../geometry.ts'
 import { type ContentRequest, type NewAnnotation, type PreparedCapture, send } from '../messages.ts'
-import { type Session, type Tool, currentSnapshot } from '../state/session.ts'
+import { type Session, type Tool, currentSnapshot, submitStatus } from '../state/session.ts'
 import { describe, elementAt } from '../target-hint.ts'
 import { mountDeviceFrame } from './device-frame.ts'
 import { OVERLAY_CSS } from './style.ts'
@@ -516,6 +516,17 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     else if (action === 'close') void send({ type: 'snapshot/close' }).catch(report)
   }
 
+  function submit() {
+    if (session.pending) return
+    finishStrokes()
+    if (editing !== null) closePopover(true)
+    const status = submitStatus(session)
+    void send({ type: 'round/submit', status }).then(
+      () => notify(status === 'done' ? 'Done: Claude stops waiting for rounds' : `Round ${session.round} sent to Claude`),
+      report
+    )
+  }
+
   function capture() {
     finishStrokes()
     if (editing !== null) closePopover(true)
@@ -534,6 +545,13 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       e.preventDefault()
       e.stopPropagation()
       return snapshot ? undefined : capture()
+    }
+    // the round to Claude, from wherever the focus is: Ctrl+D, the browser's bookmark otherwise; Done
+    // when there is nothing to send. The comment being typed, and the pen's strokes, go first.
+    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault()
+      e.stopPropagation()
+      return submit()
     }
     const target = e.composedPath()[0] as HTMLElement | undefined
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return

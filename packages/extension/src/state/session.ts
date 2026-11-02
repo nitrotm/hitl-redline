@@ -206,6 +206,16 @@ export function answersOf(session: Session): Answer[] {
   })
 }
 
+// something to send: screenshots, a comment on the round, answers to Claude's questions
+export function hasFeedback(session: Session): boolean {
+  return session.snapshots.length > 0 || session.comment.trim() !== '' || answersOf(session).length > 0
+}
+
+// What Ctrl+D sends: the round if it has something, or else Done, which ends the loop.
+export function submitStatus(session: Session): RoundStatus {
+  return hasFeedback(session) ? 'feedback' : 'done'
+}
+
 // Claude's reply, kept if it is to this session's last round sent: a newer round makes it stale
 export function storeReply(session: Session, reply: Reply): Session {
   if (reply.sessionId !== session.id || reply.round !== session.lastSent?.round || session.reply?.round === reply.round) return session

@@ -6,7 +6,7 @@ import type { Annotation, Reply, Snapshot, Status } from '@redline/shared'
 import { DEVICES, WINDOW } from '@/src/devices.ts'
 import { badgeFor, fillPath } from '@/src/geometry.ts'
 import { type Request, send } from '@/src/messages.ts'
-import { type Session, answersOf } from '@/src/state/session.ts'
+import { type Session, hasFeedback, submitStatus } from '@/src/state/session.ts'
 
 import { type ActiveTab, useActiveTab, useBridge, useImage, useSession } from './hooks.ts'
 
@@ -98,6 +98,7 @@ const SHORTCUTS: [string[][], string][] = [
   [[['4']], 'Pen; strokes close in time make one mark'],
   [[['Q'], ['W'], ['E'], ['R']], 'Colors, by place: the row under 1 to 4'],
   [[['Ctrl', 'Z']], 'Undo the last mark'],
+  [[['Ctrl', 'D']], 'Send to Claude; Done when there is nothing to send'],
   [[['Del']], 'Delete the selected mark'],
   [[['Double-click']], "Edit a mark's comment"],
   [[['Enter'], ['Esc']], 'Save, close the comment'],
@@ -174,7 +175,21 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
   const tabId = tab.id
   const locked = Boolean(session.pending)
   const marks = session.snapshots.reduce((n, s) => n + s.annotations.length, 0)
-  const canSend = session.snapshots.length > 0 || session.comment.trim() !== '' || answersOf(session).length > 0
+  const canSend = hasFeedback(session)
+  // Ctrl+D, as on the page: the round, or Done when there is nothing to send
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'd') return
+      e.preventDefault()
+      if (!locked) {
+        // the comment being typed first: it saves as it loses the focus
+        ;(document.activeElement as HTMLElement | null)?.blur()
+        void ask({ type: 'round/submit', tabId, status: submitStatus(session) })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   return (
     <div class="session">
@@ -209,7 +224,7 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
         />
         <Outbox session={session} ask={ask} />
         <div class="actions">
-          <button class="primary" disabled={locked || !canSend} onClick={() => ask({ type: 'round/submit', tabId, status: 'feedback' })}>
+          <button class="primary" disabled={locked || !canSend} title="Ctrl+D" onClick={() => ask({ type: 'round/submit', tabId, status: 'feedback' })}>
             Send to Claude{marks ? ` (${marks} mark${marks === 1 ? '' : 's'})` : ''}
           </button>
           <button

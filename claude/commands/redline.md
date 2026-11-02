@@ -59,7 +59,9 @@ Then:
 1. Apply the feedback in the code. Each comment belongs to a mark: find the element from its
    path (from under `<body>`; `…` is the snapshot's common path, `[1/2]` the first of two
    alike siblings, `div ×3` three nested divs), its selector and text, and from what the
-   screenshot shows. When a comment is unclear, apply what
+   screenshot shows. With a Preact page in development, a mark also names the components that
+   rendered its element and where its JSX is (`Preact: App › Hero › Button, its JSX at
+src/Hero.tsx:42:7`): start there. When a comment is unclear, apply what
    you can and ask about the rest at the end. Do not guess wildly.
 2. If the status is **done**, apply what the round holds (it may be empty), summarize the session,
    and stop: no new `redline wait`.

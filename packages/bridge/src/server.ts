@@ -66,7 +66,7 @@ export function waitForRound(options: WaitOptions): Promise<ReceivedRound> {
       if (received) return send(res, 409, { error: 'this bridge already received its round' })
       received = true
 
-      const written = await writeRound(options.root, parsed.data)
+      const written = await writeRound(options.root, parsed.data, options.project)
       const accepted: RoundAccepted = { directory: written.directory }
       send(res, 200, accepted, () => {
         server.close()

@@ -11,9 +11,12 @@ export const EXTENSION = join(ROOT, 'packages/extension/.output')
 // e2e-fixtures/, on a free port of the loopback
 export async function serveFixtures(): Promise<{ url: string; close: () => void }> {
   const server: Server = createServer(async (req, res) => {
-    const name = new URL(req.url ?? '/', 'http://x').pathname.replace(/^\/+/, '') || 'test-page.html'
-    const body = await readFile(join(ROOT, 'e2e-fixtures', name.replace(/\.\./g, ''))).catch(() => undefined)
-    if (body) res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(body)
+    const name = (new URL(req.url ?? '/', 'http://x').pathname.replace(/^\/+/, '') || 'test-page.html').replace(/\.\./g, '')
+    // the repository's Preact too, for preact-page.html
+    const file = name.startsWith('node_modules/preact/') ? join(ROOT, name) : join(ROOT, 'e2e-fixtures', name)
+    const body = await readFile(file).catch(() => undefined)
+    const type = /\.m?js$/.test(name) ? 'text/javascript' : 'text/html; charset=utf-8'
+    if (body) res.writeHead(200, { 'content-type': type }).end(body)
     else res.writeHead(404).end()
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))

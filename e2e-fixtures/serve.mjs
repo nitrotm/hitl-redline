@@ -5,12 +5,14 @@ import { extname, join, normalize } from 'node:path'
 
 const root = import.meta.dirname
 const port = Number(process.argv[2] ?? 47391)
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript' }
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript' }
 
 createServer(async (req, res) => {
   const path = normalize(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'test-page.html'
+  // the repository's Preact too, for preact-page.html
+  const file = path.startsWith('node_modules/preact/') ? join(root, '..', path) : join(root, path)
   try {
-    const body = await readFile(join(root, path))
+    const body = await readFile(file)
     res.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream' }).end(body)
   } catch {
     res.writeHead(404).end('not found')

@@ -77,3 +77,28 @@ describe('paths', () => {
     expect(md).toContain('  - Path: `main > div ×2 > h2`')
   })
 })
+
+describe('rendered', () => {
+  it('names the components and where the JSX is, from the project', () => {
+    const round = makeRound()
+    round.snapshots[0]!.annotations[0]!.target = {
+      selector: 'button.cta',
+      tag: 'button',
+      text: 'Sign up',
+      rendered: { framework: 'preact', components: ['App', 'Hero', 'Button'], source: { file: '/home/me/app/src/Hero.tsx', line: 42, column: 7 } },
+    }
+    expect(renderFeedback(round, '/home/me/app')).toContain('  - Preact: `App › Hero › Button`, its JSX at `src/Hero.tsx:42:7`')
+    expect(renderFeedback(round, '/elsewhere')).toContain('its JSX at `/home/me/app/src/Hero.tsx:42:7`')
+  })
+
+  it('keeps the innermost components of a long chain', () => {
+    const round = makeRound()
+    round.snapshots[0]!.annotations[0]!.target = {
+      selector: 'b',
+      tag: 'b',
+      text: '',
+      rendered: { framework: 'preact', components: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },
+    }
+    expect(renderFeedback(round)).toContain('  - Preact: `… › C › D › E › F › G`')
+  })
+})

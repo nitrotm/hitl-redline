@@ -1,4 +1,4 @@
-import type { Annotation, Point, RoundStatus, Target, Viewport } from '@redline/shared'
+import type { Annotation, Point, Rendered, RoundStatus, Target, Viewport } from '@redline/shared'
 
 import type { Tool } from './state/session.ts'
 
@@ -32,6 +32,8 @@ export type Request =
   | { type: 'snapshot/image'; tabId?: number; snapshotId: string }
   | { type: 'comment/set'; tabId?: number; comment: string }
   | { type: 'round/submit'; tabId?: number; status: RoundStatus }
+  // what the page's framework knows of the element marked with the nonce (src/frameworks.ts)
+  | { type: 'page/inspect'; tabId?: number; nonce: string }
   | { type: 'outbox/flush' }
   | { type: 'whoami' }
 
@@ -50,6 +52,7 @@ export interface Responses {
   'snapshot/image': string
   'comment/set': null
   'round/submit': null
+  'page/inspect': Rendered | null
   'outbox/flush': null
   // the tab of the sender
   whoami: number

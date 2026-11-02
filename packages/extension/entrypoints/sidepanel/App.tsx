@@ -378,7 +378,12 @@ function Mark({
       <div class="body">
         <span class="kind">
           {KINDS[annotation.kind]}
-          {annotation.target && <code title={annotation.target.selector}> {annotation.target.selector}</code>}
+          {/* the components that rendered it, the innermost, when the page's framework says; its selector otherwise */}
+          {annotation.target?.rendered?.components.length ? (
+            <code title={annotation.target.rendered.components.join(' › ')}> {annotation.target.rendered.components.slice(-2).join(' › ')}</code>
+          ) : (
+            annotation.target && <code title={annotation.target.selector}> {annotation.target.selector}</code>
+          )}
         </span>
         <CommentBox
           value={annotation.comment}

@@ -23,7 +23,9 @@ const pinnedUrl = params.get('url') ?? undefined
 
 async function pinnedTab() {
   if (pinnedId !== undefined) return browser.tabs.get(pinnedId).catch(() => undefined)
-  return (await browser.tabs.query({})).find((t) => t.url && isUnder(t.url, pinnedUrl!))
+  // the tab of that very page, or else the first one under it
+  const tabs = await browser.tabs.query({})
+  return tabs.find((t) => t.url === pinnedUrl) ?? tabs.find((t) => t.url && isUnder(t.url, pinnedUrl!))
 }
 
 export function useActiveTab(): ActiveTab | undefined {

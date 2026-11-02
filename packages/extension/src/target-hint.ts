@@ -10,7 +10,8 @@ const MAX_LABEL = 40
 // a path deeper than this keeps its last steps
 const MAX_PATH = 40
 
-export function targetAt(doc: Document, clientX: number, clientY: number, ignore: Element): Target | undefined {
+// the element at a point of the window, but IGNORE (the overlay), down into open shadow roots
+export function elementAt(doc: Document, clientX: number, clientY: number, ignore: Element): Element | undefined {
   let element = doc.elementsFromPoint(clientX, clientY).find((el) => el !== ignore && !ignore.contains(el) && el !== doc.documentElement && el !== doc.body)
   if (!element) return undefined
   // into the open shadow roots, down to the element itself
@@ -20,6 +21,10 @@ export function targetAt(doc: Document, clientX: number, clientY: number, ignore
     inner = inner.shadowRoot?.elementsFromPoint(clientX, clientY)[0]
   )
     element = inner
+  return element
+}
+
+export function describe(element: Element): Target {
   return {
     selector: cssSelector(element),
     tag: element.tagName.toLowerCase(),

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Builder, By, Key, type WebDriver, until } from 'selenium-webdriver'
 import firefox from 'selenium-webdriver/firefox.js'
@@ -122,4 +123,47 @@ test('read a session that an earlier version stored', async () => {
   await driver.wait(async () => (await driver.findElements(By.css('.marks textarea'))).length === 1, 10_000)
   expect(await driver.findElement(By.css('.marks textarea')).getAttribute('value')).toBe('Old pen mark')
   expect(await driver.findElement(By.css('.marks .kind')).getText()).toContain('Freehand')
+})
+
+test('name the Preact components of a mark, and where its JSX is', async () => {
+  const url = `${fixtures.url}preact-page.html`
+  bridge = await startBridge(url)
+  await driver.switchTo().newWindow('tab')
+  await driver.get(url)
+  const overlay = await driver.wait(until.elementLocated(By.css('redline-overlay')), 10_000)
+  const shadow = await overlay.getShadowRoot()
+  await driver.wait(until.elementLocated(By.css('button.cta')), 10_000)
+  const rect = await driver.executeScript<{ x: number; y: number; width: number; height: number }>(
+    'return document.querySelector("button.cta").getBoundingClientRect().toJSON()'
+  )
+
+  await driver.actions().keyDown(Key.CONTROL).sendKeys('s').keyUp(Key.CONTROL).perform()
+  await driver.wait(async () => (await shadow.findElement(By.css('.frozen'))).isDisplayed(), 10_000)
+  await driver.actions().sendKeys('2').perform()
+  const at = (x: number, y: number) => ({ x: Math.round(x), y: Math.round(y), origin: 'viewport' as const })
+  await driver
+    .actions()
+    .move(at(rect.x - 8, rect.y - 8))
+    .press()
+    .move({ ...at(rect.x + rect.width / 2, rect.y + rect.height / 2), duration: 100 })
+    .move({ ...at(rect.x + rect.width + 8, rect.y + rect.height + 8), duration: 100 })
+    .release()
+    .perform()
+  const popover = await shadow.findElement(By.css('.popover'))
+  await driver.wait(() => popover.isDisplayed(), 5_000)
+  await driver.actions().sendKeys('Bigger', Key.ENTER).perform()
+
+  // the sidebar names the components, once the page has told them
+  await driver.switchTo().newWindow('tab')
+  await driver.get(`moz-extension://${UUID}/sidepanel.html?url=${encodeURIComponent(url)}`)
+  await driver.wait(async () => {
+    const kinds = await driver.findElements(By.css('.marks .kind'))
+    return kinds.length === 1 && (await kinds[0]!.getText()).includes('Hero › Button')
+  }, 10_000)
+  await driver.findElement(By.xpath('//button[starts-with(normalize-space(), "Send to Claude")]')).click()
+
+  const { code, stdout } = await bridge.done
+  expect(code, stdout).toBe(0)
+  const md = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
+  expect(md).toContain('  - Preact: `App › Hero › Button`, its JSX at `/project/src/App.tsx:3:5`')
 })

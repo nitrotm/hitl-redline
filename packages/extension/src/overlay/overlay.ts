@@ -1,11 +1,12 @@
-import type { Annotation, Point, Snapshot } from '@redline/shared'
+import type { Annotation, Point, Rendered, Snapshot, Target } from '@redline/shared'
 
 import { type Busy, busyness, placeBadge } from '../badge-place.ts'
 import { deviceOf } from '../devices.ts'
+import { TARGET_ATTRIBUTE } from '../frameworks.ts'
 import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, rectFromCorners, strokesPath, translate } from '../geometry.ts'
 import { type ContentRequest, type NewAnnotation, type PreparedCapture, send } from '../messages.ts'
 import { type Session, type Tool, currentSnapshot } from '../state/session.ts'
-import { targetAt } from '../target-hint.ts'
+import { describe, elementAt } from '../target-hint.ts'
 import { mountDeviceFrame } from './device-frame.ts'
 import { OVERLAY_CSS } from './style.ts'
 
@@ -294,7 +295,12 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       // until the background's answer comes back through storage, it stays where it was dropped
       snapshot = { ...snapshot, annotations: snapshot.annotations.map((a) => (a.id === done.id ? moved : a)) }
       drawShapes()
-      void send({ type: 'annotation/update', id: done.id, patch: { ...patch, target: targetOf(moved) } }).catch(report)
+      const element = elementOf(moved)
+      const target = element && describe(element)
+      const rendered = inspect(element)
+      void send({ type: 'annotation/update', id: done.id, patch: { ...patch, target } })
+        .then(() => addRendered(done.id, target, rendered))
+        .catch(report)
       return
     }
 
@@ -332,7 +338,9 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     const badge = badgeOf({ ...drawnAnnotation, id: session.nextAnnotationId, comment: '' } as Annotation)
     const annotation = badge ? { ...drawnAnnotation, badge } : drawnAnnotation
     const drawn = { ...annotation, id: NEW, comment: '' } as Annotation
-    const target = targetOf(drawn)
+    const element = elementOf(drawn)
+    const target = element && describe(element)
+    const rendered = inspect(element)
     // drawn at once, and its comment open at once, to type into: its id comes from the background
     shapes.append(shapeElement(drawn))
     openPopover(drawn)
@@ -343,6 +351,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
         void send({ type: 'annotation/delete', id: added.id }).catch(report)
         return
       }
+      addRendered(added.id, target, rendered)
       if (editing === NEW) {
         editing = added.id
         popover.querySelector<HTMLSpanElement>('.badge')!.textContent = `#${added.id}`
@@ -383,11 +392,30 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
 
   // The element the mark points at (aim: an arrow's tip, the others' center), on the live page under
   // the screenshot: the same, as long as the page has not changed since.
-  function targetOf(annotation: Annotation) {
+  function elementOf(annotation: Annotation): Element | undefined {
     const c = aim(annotation)
     // shown as a device, the page is the frame's
     const live = deviceOf(session.device) ? deviceFrame.page() : { win, doc }
-    return live && targetAt(live.doc, c.x - live.win.scrollX, c.y - live.win.scrollY, host)
+    return live && elementAt(live.doc, c.x - live.win.scrollX, c.y - live.win.scrollY, host)
+  }
+
+  // What the page's framework knows of the element (the components that rendered it, where its
+  // JSX is), asked of the page itself, then added to the mark's target: it takes a moment.
+  function inspect(element: Element | undefined): Promise<Rendered | null> {
+    if (!element) return Promise.resolve(null)
+    const nonce = crypto.randomUUID()
+    element.setAttribute(TARGET_ATTRIBUTE, nonce)
+    return send({ type: 'page/inspect', nonce })
+      .catch(() => null)
+      .finally(() => element.removeAttribute(TARGET_ATTRIBUTE))
+  }
+
+  function addRendered(id: number, target: Target | undefined, rendered: Promise<Rendered | null>) {
+    void rendered
+      .then((r) => {
+        if (r && target) return send({ type: 'annotation/update', id, patch: { target: { ...target, rendered: r } } })
+      })
+      .catch(report)
   }
 
   // the comment of a mark, where it is, at once: Enter saves, Esc closes, Shift+Enter is a new line

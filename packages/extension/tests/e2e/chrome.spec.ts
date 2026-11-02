@@ -195,3 +195,35 @@ test('show the page as a phone, and capture it so', async () => {
   const clean = await readPng(join(round, 'S1.clean.png'))
   expect(clean.width / clean.height).toBeCloseTo(393 / 852, 1)
 })
+
+test('name the Preact components of a mark, and where its JSX is', async () => {
+  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+  const extensionId = new URL(worker.url()).host
+  const url = `${fixtures.url}preact-page.html`
+  bridge = await startBridge(url)
+  const page = await context.newPage()
+  await page.goto(url)
+  await expect(page.locator('redline-overlay')).toBeAttached()
+  const button = (await page.locator('button.cta').boundingBox())!
+
+  await page.keyboard.press('Control+s')
+  await expect(page.locator('redline-overlay .frozen')).toBeVisible()
+  await page.keyboard.press('2')
+  await page.mouse.move(button.x - 8, button.y - 8)
+  await page.mouse.down()
+  await page.mouse.move(button.x + button.width + 8, button.y + button.height + 8, { steps: 4 })
+  await page.mouse.up()
+  await page.keyboard.type('Bigger')
+  await page.keyboard.press('Enter')
+
+  // the sidebar names the components, once the page has told them
+  const sidebar = await context.newPage()
+  await sidebar.goto(`chrome-extension://${extensionId}/sidepanel.html?url=${encodeURIComponent(url)}`)
+  await expect(sidebar.locator('.marks .kind')).toContainText('Hero › Button')
+  await sidebar.getByRole('button', { name: /^Send to Claude/ }).click()
+
+  const { code, stdout } = await bridge.done
+  expect(code, stdout).toBe(0)
+  const md = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
+  expect(md).toContain('  - Preact: `App › Hero › Button`, its JSX at `/project/src/App.tsx:3:5`')
+})

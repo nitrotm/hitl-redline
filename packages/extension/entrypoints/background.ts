@@ -1,7 +1,8 @@
-import { isUnder } from '@redline/shared'
+import { type Rendered, isUnder } from '@redline/shared'
 
 import { BridgeError, bridgeStatus, postRound } from '@/src/bridge-client.ts'
 import { composite, crop } from '@/src/capture/composite.ts'
+import { inspectPage } from '@/src/frameworks.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Reply, Request, Responses } from '@/src/messages.ts'
 import { deleteImage, deleteSessionImages, getImage, putImage } from '@/src/state/images.ts'
 import {
@@ -86,6 +87,8 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
   switch (request.type) {
     case 'session/discard':
       return discard(tabId)
+    case 'page/inspect':
+      return inspect(tabId, request.nonce)
     case 'ui/set':
       if (!(await getSession(tabId))?.active) await start(tabId)
       return change(tabId, (s) => ({ ...(request.tool ? setTool(s, request.tool) : s), color: request.color ?? s.color, device: request.device ?? s.device }))
@@ -164,6 +167,17 @@ async function inject(tabId: number) {
   } catch (error) {
     await update(tabId, (s) => [s && { ...s, active: false }, null])
     throw new Error(`Redline cannot draw on this page: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+// In the page itself, where its framework's properties are (src/frameworks.ts); nothing if it
+// cannot be run there.
+async function inspect(tabId: number, nonce: string): Promise<Rendered | null> {
+  try {
+    const [result] = await browser.scripting.executeScript({ target: { tabId }, world: 'MAIN', func: inspectPage, args: [nonce] })
+    return (result?.result as Rendered | null | undefined) ?? null
+  } catch {
+    return null
   }
 }
 

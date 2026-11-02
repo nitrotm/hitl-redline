@@ -36,12 +36,22 @@ export const PathStep = z.object({
 })
 export type PathStep = z.infer<typeof PathStep>
 
+// What a framework knows of an element, in a development build: the components that rendered it,
+// outermost first, and where its JSX is.
+export const Rendered = z.object({
+  framework: z.string(),
+  components: z.array(z.string()),
+  source: z.object({ file: z.string(), line: z.number().int(), column: z.number().int().optional() }).optional(),
+})
+export type Rendered = z.infer<typeof Rendered>
+
 // the element under an annotation, for Claude to find it in the sources
 export const Target = z.object({
   selector: z.string(),
   tag: z.string(),
   text: z.string(),
   path: z.array(PathStep).optional(),
+  rendered: Rendered.optional(),
 })
 export type Target = z.infer<typeof Target>
 

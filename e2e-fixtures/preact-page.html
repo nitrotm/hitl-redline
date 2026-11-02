@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redline Preact page</title>
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      main {
+        padding: 40px;
+      }
+      .cta {
+        padding: 8px 16px;
+        font: inherit;
+        background: #2563eb;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+      }
+    </style>
+    <!-- the repository's Preact, as a dev server would serve it -->
+    <script type="importmap">
+      { "imports": { "preact": "/node_modules/preact/dist/preact.mjs", "preact/jsx-runtime": "/node_modules/preact/jsx-runtime/dist/jsxRuntime.mjs" } }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { render } from 'preact'
+      import { jsxDEV } from 'preact/jsx-runtime'
+
+      // what a development build's JSX compiles to: jsxDEV, with where each JSX is
+      const at = (lineNumber) => ({ fileName: '/project/src/App.tsx', lineNumber, columnNumber: 5 })
+
+      function Button({ label }) {
+        return jsxDEV('button', { class: 'cta', children: label }, undefined, false, at(3))
+      }
+      function Hero() {
+        return jsxDEV(
+          'section',
+          {
+            class: 'hero',
+            children: [jsxDEV('h2', { children: 'Hello from Preact' }, undefined, false, at(7)), jsxDEV(Button, { label: 'Sign up' }, undefined, false, at(8))],
+          },
+          undefined,
+          true,
+          at(6)
+        )
+      }
+      function App() {
+        return jsxDEV('main', { id: 'app', children: jsxDEV(Hero, {}, undefined, false, at(12)) }, undefined, false, at(11))
+      }
+
+      render(jsxDEV(App, {}), document.getElementById('root'))
+    </script>
+  </body>
+</html>

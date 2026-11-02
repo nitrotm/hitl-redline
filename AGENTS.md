@@ -54,6 +54,11 @@ nix flake check         # builds the workspace: typecheck and tests included
   selector, its text, and its path from under `<body>` (`PathStep`s, through shadow roots). The
   writer prints paths compact (`packages/shared/src/path.ts`): `button.cta[1/2]`, `div ×3`, and
   what a snapshot's marks have in common written once.
+- **What the page's framework knows** (`src/frameworks.ts`, `target.rendered`): the overlay marks
+  the element with an attribute, and the background runs `inspectPage` in the page itself
+  (`executeScript`, world MAIN), where the framework's properties are. Preact only, for now: the
+  components above the element, and its JSX's `__source` in a development build. `inspectPage`
+  is sent as its source: no import, no closure in it.
 - **Coordinates are the page's** (CSS px from the document's top left): the screenshot's, plus the
   scroll it was taken at. The writer turns them back into screenshot coordinates.
 - **The overlay, the sidebar's preview and the composite draw the same shapes**: `src/geometry.ts`

@@ -114,6 +114,10 @@ Add `.redline/` to the project's `.gitignore` (`/redline` does).
 Each `#id` badge goes where it hides the least: of the places around its mark, the one with the
 least to see on the screenshot, and no other mark.
 
+Each mark tells Claude where its element is: a CSS selector, its text, and its path in the page
+(`main#app > section.hero > button.cta[1/2]`). On a Preact page in development, it also names the
+components that rendered it and where its JSX is, so Claude goes straight to the source.
+
 Mark ids are never reused in a session: `#7` is the same mark in every snapshot and every round.
 
 ## Develop

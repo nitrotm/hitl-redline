@@ -1,10 +1,11 @@
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 
 import {
   type Annotation,
   type FeedbackRound,
   type PathStep,
+  type Rendered,
   type Snapshot,
   type SnapshotWithImages,
   boundingBox,
@@ -22,7 +23,8 @@ export interface WrittenRound {
   annotations: number
 }
 
-export async function writeRound(root: string, round: FeedbackRound): Promise<WrittenRound> {
+// PROJECT: the directory the sources are in, which their paths are written from
+export async function writeRound(root: string, round: FeedbackRound, project?: string): Promise<WrittenRound> {
   const rounds = join(root, 'rounds')
   await mkdir(rounds, { recursive: true })
   const directory = await nextRoundDirectory(rounds)
@@ -34,7 +36,7 @@ export async function writeRound(root: string, round: FeedbackRound): Promise<Wr
       writeFile(join(directory, imageFiles(s).annotated), decodePng(s.images.annotated)),
     ]),
     writeFile(join(directory, 'feedback.json'), JSON.stringify(json, null, 2) + '\n'),
-    writeFile(join(directory, 'feedback.md'), renderFeedback(round)),
+    writeFile(join(directory, 'feedback.md'), renderFeedback(round, project)),
   ])
 
   return {
@@ -66,7 +68,7 @@ function decodePng(dataUrl: string): Buffer {
   return Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64')
 }
 
-export function renderFeedback(round: FeedbackRound): string {
+export function renderFeedback(round: FeedbackRound, project?: string): string {
   const lines: string[] = []
   lines.push(`# Redline feedback: round ${round.round}`, '')
   lines.push(`- Session: \`${round.sessionId}\``)
@@ -79,7 +81,7 @@ export function renderFeedback(round: FeedbackRound): string {
   lines.push('')
   if (round.comment.trim()) lines.push('## General comment', '', quote(round.comment), '')
 
-  for (const snapshot of round.snapshots) lines.push(...renderSnapshot(snapshot))
+  for (const snapshot of round.snapshots) lines.push(...renderSnapshot(snapshot, project))
 
   if (round.snapshots.length > 0) {
     lines.push(
@@ -93,7 +95,7 @@ export function renderFeedback(round: FeedbackRound): string {
   return lines.join('\n')
 }
 
-function renderSnapshot(snapshot: SnapshotWithImages | Snapshot): string[] {
+function renderSnapshot(snapshot: SnapshotWithImages | Snapshot, project: string | undefined): string[] {
   const { viewport: v } = snapshot
   const files = imageFiles(snapshot)
   const lines = [
@@ -110,14 +112,14 @@ function renderSnapshot(snapshot: SnapshotWithImages | Snapshot): string[] {
   const common = prefix.length >= MIN_COMMON ? prefix : []
   if (common.length) lines.splice(lines.length - 1, 0, `- Common path of its marks: \`${pathText(common)}\``)
   if (snapshot.annotations.length === 0) lines.push('No annotations.', '')
-  for (const annotation of snapshot.annotations) lines.push(renderAnnotation(annotation, snapshot, common), '')
+  for (const annotation of snapshot.annotations) lines.push(renderAnnotation(annotation, snapshot, common, project), '')
   return lines
 }
 
 // fewer steps in common than this are written in full in each path
 const MIN_COMMON = 2
 
-function renderAnnotation(annotation: Annotation, snapshot: Snapshot, common: PathStep[]): string {
+function renderAnnotation(annotation: Annotation, snapshot: Snapshot, common: PathStep[], project: string | undefined): string {
   // in the screenshot: the page's coordinates, less the scroll it was taken at
   const at = (p: { x: number; y: number }) => `(${Math.round(p.x - snapshot.viewport.scrollX)}, ${Math.round(p.y - snapshot.viewport.scrollY)})`
   let where: string
@@ -128,7 +130,8 @@ function renderAnnotation(annotation: Annotation, snapshot: Snapshot, common: Pa
   }
   const target = annotation.target ? ` on \`${annotation.target.selector}\`${annotation.target.text ? ` "${oneLine(annotation.target.text, 60)}"` : ''}` : ''
   const comment = annotation.comment.trim() ? `\n\n${quote(annotation.comment, '  ')}` : ' (no comment)'
-  return `- **#${annotation.id}** ${where}${target}${renderPath(annotation.target?.path, common)}${comment}`
+  const rendered = renderRendered(annotation.target?.rendered, project)
+  return `- **#${annotation.id}** ${where}${target}${renderPath(annotation.target?.path, common)}${rendered}${comment}`
 }
 
 // the path from under <body>, after the common path of the snapshot's marks when there is one
@@ -137,6 +140,23 @@ function renderPath(path: PathStep[] | undefined, common: PathStep[]): string {
   if (!common.length) return `\n  - Path: \`${pathText(path)}\``
   const rest = path.slice(common.length)
   return `\n  - Path: \`${rest.length ? `… > ${pathText(rest)}` : '… (the common path)'}\``
+}
+
+// the components that rendered the element, its framework's name first, and where its JSX is, from
+// the project when it is in it
+const MAX_COMPONENTS = 5
+
+function renderRendered(rendered: Rendered | undefined, project: string | undefined): string {
+  if (!rendered) return ''
+  const framework = rendered.framework.charAt(0).toUpperCase() + rendered.framework.slice(1)
+  const names = rendered.components.length > MAX_COMPONENTS ? ['…', ...rendered.components.slice(-MAX_COMPONENTS)] : rendered.components
+  const parts = names.length ? [`\`${names.join(' › ')}\``] : []
+  if (rendered.source) {
+    const { file, line, column } = rendered.source
+    const shown = project && file.startsWith(`${project}/`) ? relative(project, file) : file
+    parts.push(`its JSX at \`${shown}:${line}${column !== undefined ? `:${column}` : ''}\``)
+  }
+  return parts.length ? `\n  - ${framework}: ${parts.join(', ')}` : ''
 }
 
 function quote(text: string, indent = ''): string {

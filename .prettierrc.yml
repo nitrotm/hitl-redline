@@ -9,6 +9,7 @@ arrowParens: always
 importOrder:
   - '<THIRD_PARTY_MODULES>'
   - '^@redline/(.*)$'
+  - '^@/(.*)$'
   - '^[./]'
   - '^[../]'
 importOrderSeparation: true

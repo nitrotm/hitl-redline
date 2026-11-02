@@ -1,11 +1,12 @@
+import { useEffect, useState } from 'preact/hooks'
+
+import { type Status, isUnder } from '@redline/shared'
+
 import { bridgeStatus } from '@/src/bridge-client.ts'
 import { send } from '@/src/messages.ts'
 import { type SnapshotImages, getImages } from '@/src/state/images.ts'
 import type { Session } from '@/src/state/session.ts'
 import { getSession, watchSession } from '@/src/state/store.ts'
-import { useEffect, useState } from 'preact/hooks'
-
-import type { Status } from '@redline/shared'
 
 export interface ActiveTab {
   id: number
@@ -14,8 +15,16 @@ export interface ActiveTab {
 }
 
 // The tab the sidebar is for: the active one of its window, as it changes; or, opened in a tab of
-// its own (sidepanel.html?tab=ID, for the end-to-end tests and debugging), the one it names.
-const pinned = Number(new URLSearchParams(location.search).get('tab')) || undefined
+// its own (for the end-to-end tests and debugging), the one it names: sidepanel.html?tab=ID, or
+// ?url=PREVIEW for the first tab there.
+const params = new URLSearchParams(location.search)
+const pinnedId = Number(params.get('tab')) || undefined
+const pinnedUrl = params.get('url') ?? undefined
+
+async function pinnedTab() {
+  if (pinnedId !== undefined) return browser.tabs.get(pinnedId).catch(() => undefined)
+  return (await browser.tabs.query({})).find((t) => t.url && isUnder(t.url, pinnedUrl!))
+}
 
 export function useActiveTab(): ActiveTab | undefined {
   const [tab, setTab] = useState<ActiveTab>()
@@ -23,8 +32,8 @@ export function useActiveTab(): ActiveTab | undefined {
     let windowId: number | undefined
     const refresh = async () => {
       const [active] =
-        pinned !== undefined
-          ? [await browser.tabs.get(pinned).catch(() => undefined)]
+        pinnedId !== undefined || pinnedUrl !== undefined
+          ? [await pinnedTab()]
           : await browser.tabs.query({ active: true, ...(windowId === undefined ? { currentWindow: true } : { windowId }) })
       windowId = active?.windowId
       setTab(active?.id === undefined ? undefined : { id: active.id, title: active.title ?? '', url: active.url ?? '' })

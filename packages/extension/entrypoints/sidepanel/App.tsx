@@ -1,8 +1,9 @@
-import { type Request, send } from '@/src/messages.ts'
-import type { Session } from '@/src/state/session.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 
 import type { Annotation, Snapshot, Status } from '@redline/shared'
+
+import { type Request, send } from '@/src/messages.ts'
+import type { Session } from '@/src/state/session.ts'
 
 import { type ActiveTab, useActiveTab, useBridge, useImages, useSession } from './hooks.ts'
 

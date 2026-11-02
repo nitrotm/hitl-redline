@@ -1,3 +1,5 @@
+import { isUnder } from '@redline/shared'
+
 import { BridgeError, bridgeStatus, postRound } from '@/src/bridge-client.ts'
 import { composite } from '@/src/capture/composite.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Reply, Request, Responses } from '@/src/messages.ts'
@@ -17,8 +19,6 @@ import {
   updateAnnotation,
 } from '@/src/state/session.ts'
 import { getSession, getSessions, update } from '@/src/state/store.ts'
-
-import { isUnder } from '@redline/shared'
 
 // The background owns the sessions: the overlay and the sidebar ask it for every change
 // (src/messages.ts), and watch storage for the result. It captures the snapshots, and sends the

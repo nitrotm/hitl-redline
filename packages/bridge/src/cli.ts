@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 
-import { DEFAULT_PORT, PORT_ENV, Status, bridgeUrl } from '@redline/shared'
+import { DEFAULT_PORT, PORT_ENV, Reply, Status, bridgeUrl } from '@redline/shared'
 
 import { waitForRound } from './server.ts'
 
@@ -19,6 +20,9 @@ options:
   --dir PATH      wait: where the rounds go (default: ./.redline)
   --timeout S     wait: give up after S seconds, with exit code 2 (default: never)
   --url URL       wait: the preview, where Redline starts by itself once the page loads
+  --reply FILE    wait: Claude's reply to the last round, as JSON, shown in the sidebar:
+                  { "sessionId", "round", "summary"?, "marks"?: [{ "id", "text" }],
+                    "questions"?: [{ "id": "Q1", "text", "mark"? }] }
 `
 
 async function main(argv: string[]): Promise<number> {
@@ -30,6 +34,7 @@ async function main(argv: string[]): Promise<number> {
       dir: { type: 'string' },
       timeout: { type: 'string' },
       url: { type: 'string' },
+      reply: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
   })
@@ -43,7 +48,13 @@ async function main(argv: string[]): Promise<number> {
 
   switch (command) {
     case 'wait':
-      return wait(port, resolve(values.dir ?? '.redline'), values.url, values.timeout === undefined ? undefined : Number(values.timeout))
+      return wait(
+        port,
+        resolve(values.dir ?? '.redline'),
+        values.url,
+        values.reply === undefined ? undefined : await readReply(values.reply),
+        values.timeout === undefined ? undefined : Number(values.timeout)
+      )
     case 'status':
       return status(port)
     case 'extension-path': {
@@ -58,7 +69,13 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-async function wait(port: number, root: string, url: string | undefined, timeout: number | undefined): Promise<number> {
+async function readReply(file: string): Promise<Reply> {
+  const parsed = Reply.safeParse(JSON.parse(await readFile(file, 'utf8')))
+  if (!parsed.success) throw new Error(`${file} is not a reply: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)
+  return parsed.data
+}
+
+async function wait(port: number, root: string, url: string | undefined, reply: Reply | undefined, timeout: number | undefined): Promise<number> {
   const signal = timeout === undefined ? undefined : AbortSignal.timeout(timeout * 1000)
   try {
     const { round, written } = await waitForRound({
@@ -66,6 +83,7 @@ async function wait(port: number, root: string, url: string | undefined, timeout
       root,
       project: process.cwd(),
       url,
+      reply,
       signal,
       onListening: (port) => process.stdout.write(`redline: waiting for feedback on http://127.0.0.1:${port} (project ${process.cwd()})\n`),
     })

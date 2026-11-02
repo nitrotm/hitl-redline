@@ -1,4 +1,4 @@
-import type { Annotation, Point, Rendered, RoundStatus, Target, Viewport } from '@redline/shared'
+import type { Annotation, Point, Rendered, Reply, RoundStatus, Target, Viewport } from '@redline/shared'
 
 import type { Tool } from './state/session.ts'
 
@@ -31,6 +31,9 @@ export type Request =
   // the screenshot of a snapshot, for the overlay, which cannot read the extension's IndexedDB
   | { type: 'snapshot/image'; tabId?: number; snapshotId: string }
   | { type: 'comment/set'; tabId?: number; comment: string }
+  // Claude's reply to the last round, as the bridge serves it; and an answer to one of its questions
+  | { type: 'reply/store'; tabId?: number; reply: Reply }
+  | { type: 'answer/set'; tabId?: number; question: string; answer: string }
   | { type: 'round/submit'; tabId?: number; status: RoundStatus }
   // what the page's framework knows of the element marked with the nonce (src/frameworks.ts)
   | { type: 'page/inspect'; tabId?: number; nonce: string }
@@ -51,6 +54,8 @@ export interface Responses {
   'snapshot/delete': null
   'snapshot/image': string
   'comment/set': null
+  'reply/store': null
+  'answer/set': null
   'round/submit': null
   'page/inspect': Rendered | null
   'outbox/flush': null
@@ -75,10 +80,10 @@ export interface PreparedCapture {
 }
 
 // the background answers { ok, value } or { ok: false, error }, which send() turns back into a throw
-export type Reply<T> = { ok: true; value: T } | { ok: false; error: string }
+export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 
 export async function send<T extends Request['type']>(request: Extract<Request, { type: T }>): Promise<Responses[T]> {
-  const reply = (await browser.runtime.sendMessage(request)) as Reply<Responses[T]> | undefined
+  const reply = (await browser.runtime.sendMessage(request)) as Result<Responses[T]> | undefined
   if (!reply) throw new Error(`no answer to ${request.type}`)
   if (!reply.ok) throw new Error(reply.error)
   return reply.value

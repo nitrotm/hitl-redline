@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 
 import { waitForRound } from '../src/server.ts'
 import { makeRound } from './fixtures.ts'
+
+const reply = { sessionId: 'session-1', round: 1, questions: [{ id: 'Q1', text: 'Which John?' }] }
 
 function listen() {
   return new Promise<{ port: number; root: string; received: ReturnType<typeof waitForRound> }>(async (resolve) => {
@@ -16,6 +18,7 @@ function listen() {
       root,
       project: '/project',
       url: 'http://localhost:5173/',
+      reply,
       onListening: (port) => resolve({ port, root, received }),
     })
   })
@@ -38,7 +41,7 @@ describe('waitForRound', () => {
   it('answers its status, with the extension that asked last', async () => {
     const { port, received } = await listen()
     const status = (headers: Record<string, string> = {}) => fetch(`http://127.0.0.1:${port}/status`, { headers }).then((r) => r.json())
-    expect(await status()).toEqual({ app: 'redline', project: '/project', pid: process.pid, url: 'http://localhost:5173/' })
+    expect(await status()).toEqual({ app: 'redline', project: '/project', pid: process.pid, url: 'http://localhost:5173/', reply })
     await status({ 'x-redline-extension': 'moz-extension://0f1e2d3c-4b5a/' })
     await status({ 'x-redline-extension': 'https://evil.example/' })
     expect(await status()).toMatchObject({ extension: 'moz-extension://0f1e2d3c-4b5a/' })
@@ -91,6 +94,17 @@ describe('redline wait', () => {
     expect(code).toBe(0)
     expect(stdout).toContain('round 1 of session session-1: feedback, 1 snapshot, 2 annotations')
     expect(stdout.trim().split('\n').at(-1)).toBe(join(dir, 'rounds', '001', 'feedback.md'))
+  })
+
+  it('refuses a reply that is not one', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'redline-'))
+    const file = join(dir, 'reply.json')
+    await writeFile(file, JSON.stringify({ round: 1 }))
+    const child = spawn(process.execPath, [join(import.meta.dirname, '../src/cli.ts'), 'wait', '--port', '0', '--reply', file])
+    let stderr = ''
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk))
+    expect(await new Promise((resolve) => child.on('exit', resolve))).toBe(1)
+    expect(stderr).toContain('is not a reply: sessionId')
   })
 
   it('gives up after its timeout', async () => {

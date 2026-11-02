@@ -1,7 +1,9 @@
 import {
   type Annotation,
+  type Answer,
   type FeedbackRound,
   type Point,
+  type Reply,
   type RoundStatus,
   SCHEMA_VERSION,
   type Snapshot,
@@ -44,6 +46,10 @@ export interface Session {
   color: string
   // the device the page is shown as (src/devices.ts), or the window itself
   device: string
+  // Claude's reply to the last round sent, with its questions; and the answers typed to them, by
+  // question id, which go with the next round
+  reply?: Reply
+  answers?: Record<string, string>
   // submitted, until the bridge takes it: the round is built from the session when it is sent
   pending?: { status: RoundStatus; queuedAt: string; error?: string }
   lastSent?: { round: number; status: RoundStatus; directory: string; at: string }
@@ -183,6 +189,7 @@ export function buildRound(session: Session, images: Map<string, SnapshotWithIma
     round: session.round,
     status: session.pending.status,
     comment: session.comment,
+    ...(answersOf(session).length && { answers: answersOf(session) }),
     snapshots: session.snapshots.map((s) => {
       const pair = images.get(s.id)
       if (!pair) throw new Error(`the screenshot of ${s.id} is missing`)
@@ -191,11 +198,30 @@ export function buildRound(session: Session, images: Map<string, SnapshotWithIma
   }
 }
 
+// the answers typed to the reply's questions, each with its question
+export function answersOf(session: Session): Answer[] {
+  return (session.reply?.questions ?? []).flatMap((q) => {
+    const answer = session.answers?.[q.id]?.trim()
+    return answer ? [{ question: q.id, text: q.text, ...(q.mark && { mark: q.mark }), answer }] : []
+  })
+}
+
+// Claude's reply, kept if it is to this session's last round sent: a newer round makes it stale
+export function storeReply(session: Session, reply: Reply): Session {
+  if (reply.sessionId !== session.id || reply.round !== session.lastSent?.round || session.reply?.round === reply.round) return session
+  const { answers: _, ...rest } = session
+  return { ...rest, reply }
+}
+
+export function setAnswer(session: Session, question: string, answer: string): Session {
+  return { ...session, answers: { ...session.answers, [question]: answer } }
+}
+
 // The bridge took the round: the next one starts empty, on the live page. A 'done' round ends
 // the session.
 export function roundSent(session: Session, directory: string, now: string): Session {
   const status = session.pending?.status ?? 'feedback'
-  const { pending: _, current: __, selected: ___, ...rest } = session
+  const { pending: _, current: __, selected: ___, reply: ____, answers: _____, ...rest } = session
   return {
     ...rest,
     active: status === 'done' ? false : session.active,

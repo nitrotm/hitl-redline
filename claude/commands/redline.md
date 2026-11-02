@@ -61,14 +61,31 @@ Then:
    alike siblings, `div ×3` three nested divs), its selector and text, and from what the
    screenshot shows. With a Preact page in development, a mark also names the components that
    rendered its element and where its JSX is (`Preact: App › Hero › Button, its JSX at
-src/Hero.tsx:42:7`): start there. When a comment is unclear, apply what
-   you can and ask about the rest at the end. Do not guess wildly.
+src/Hero.tsx:42:7`): start there. A round may also hold **Answers to Claude's questions**:
+   the user's answers to the questions of your last reply, each under its question.
 2. If the status is **done**, apply what the round holds (it may be empty), summarize the session,
    and stop: no new `redline wait`.
-3. Otherwise start `redline wait --url <preview URL>` in the background again, **then** reload
-   the page with `navigate_page` (same URL) so the user sees the changes. Wait for the dev server's rebuild first if it has one.
-4. Reply briefly, one line per mark: `#3: padding 8 → 16px in Button.tsx`. Then end your turn
-   and wait again.
+3. Otherwise write your reply to the round to `.redline/reply.json`: it shows in the user's
+   sidebar until they send the next round, with a field to answer each question.
+
+   ```json
+   {
+     "sessionId": "<the round's session>",
+     "round": <the round's number>,
+     "summary": "One sentence on what changed.",
+     "marks": [{ "id": 3, "text": "padding 8 → 16px in Button.tsx" }],
+     "questions": [{ "id": "Q1", "mark": 2, "text": "The signed-in user's name, or literally John?" }]
+   }
+   ```
+
+   One entry in `marks` per mark you acted on. When a comment is unclear, apply what you can and
+   ask about the rest in `questions` (`mark` when it is about one), rather than guessing.
+
+4. Start `redline wait --url <preview URL> --reply .redline/reply.json` in the background,
+   **then** reload the page with `navigate_page` (same URL) so the user sees the changes. Wait
+   for the dev server's rebuild first if it has one.
+5. Say the same briefly here, one line per mark (`#3: padding 8 → 16px in Button.tsx`), and the
+   questions. Then end your turn and wait again.
 
 The `#id`s are never reused in a session: `#7` in round 3 is the same mark as `#7` in round 2.
 Refer to marks by their `#id` when you talk about them.

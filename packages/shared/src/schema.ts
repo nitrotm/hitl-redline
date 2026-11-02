@@ -112,12 +112,38 @@ export type SnapshotWithImages = z.infer<typeof SnapshotWithImages>
 export const RoundStatus = z.enum(['feedback', 'done'])
 export type RoundStatus = z.infer<typeof RoundStatus>
 
+// Claude's reply to a round, shown in the sidebar until the next one is sent: what it did of each
+// mark, and what it asks. `redline wait --reply` serves it.
+export const Question = z.object({
+  // Q1, Q2…
+  id: z.string().min(1),
+  text: z.string().min(1),
+  // the mark it is about
+  mark: z.number().int().positive().optional(),
+})
+export type Question = z.infer<typeof Question>
+
+export const Reply = z.object({
+  sessionId: z.string().min(1),
+  // the round it replies to
+  round: z.number().int().positive(),
+  summary: z.string().optional(),
+  marks: z.array(z.object({ id: z.number().int().positive(), text: z.string().min(1) })).optional(),
+  questions: z.array(Question).optional(),
+})
+export type Reply = z.infer<typeof Reply>
+
+// the user's answer to one of the reply's questions, with the question, for Claude to read together
+export const Answer = z.object({ question: z.string(), text: z.string(), mark: z.number().int().positive().optional(), answer: z.string() })
+export type Answer = z.infer<typeof Answer>
+
 export const FeedbackRound = z.object({
   version: z.literal(SCHEMA_VERSION),
   sessionId: z.string().min(1),
   round: z.number().int().positive(),
   status: RoundStatus,
   comment: z.string(),
+  answers: z.array(Answer).optional(),
   snapshots: z.array(SnapshotWithImages),
 })
 export type FeedbackRound = z.infer<typeof FeedbackRound>

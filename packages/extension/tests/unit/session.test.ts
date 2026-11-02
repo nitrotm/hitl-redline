@@ -12,7 +12,9 @@ import {
   queueRound,
   roundSent,
   selectAnnotation,
+  setAnswer,
   setTool,
+  storeReply,
   takeSnapshot,
   undo,
   updateAnnotation,
@@ -189,5 +191,33 @@ describe('upgradeSession', () => {
   it('leaves a session of this version as it is', () => {
     const session = drawn(10)
     expect(upgradeSession(session)).toEqual(session)
+  })
+})
+
+describe("Claude's reply", () => {
+  const sent = () => roundSent(queueRound(drawn(10), 'feedback', 'now'), '/d', 'later')
+  const reply = {
+    sessionId: 'session-1',
+    round: 1,
+    questions: [
+      { id: 'Q1', text: 'Which John?', mark: 1 },
+      { id: 'Q2', text: 'Darker?' },
+    ],
+  }
+
+  it('is kept for the last round sent, of this session', () => {
+    expect(storeReply(sent(), reply).reply).toEqual(reply)
+    expect(storeReply(sent(), { ...reply, round: 2 }).reply).toBeUndefined()
+    expect(storeReply(sent(), { ...reply, sessionId: 'other' }).reply).toBeUndefined()
+  })
+
+  it('has its answers go with the next round, then makes way for the next reply', () => {
+    let session = setAnswer(storeReply(sent(), reply), 'Q1', ' The signed-in user ')
+    session = setAnswer(session, 'Q2', '  ')
+    const round = buildRound(queueRound(session, 'feedback', 'now'), new Map())
+    expect(round.answers).toEqual([{ question: 'Q1', text: 'Which John?', mark: 1, answer: 'The signed-in user' }])
+    const next = roundSent(queueRound(session, 'feedback', 'now'), '/d', 'later')
+    expect(next.reply).toBeUndefined()
+    expect(next.answers).toBeUndefined()
   })
 })

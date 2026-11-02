@@ -32,9 +32,9 @@ export interface Bridge {
 }
 
 // `redline wait`, from the sources, on the extension's port
-export async function startBridge(previewUrl: string): Promise<Bridge> {
+export async function startBridge(previewUrl: string, extra: string[] = []): Promise<Bridge> {
   const dir = await mkdtemp(join(tmpdir(), 'redline-e2e-'))
-  const child = spawn(process.execPath, [join(ROOT, 'packages/bridge/src/cli.ts'), 'wait', '--url', previewUrl, '--dir', dir], {
+  const child = spawn(process.execPath, [join(ROOT, 'packages/bridge/src/cli.ts'), 'wait', '--url', previewUrl, '--dir', dir, ...extra], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let stdout = ''

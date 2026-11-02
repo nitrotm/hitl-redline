@@ -1,12 +1,12 @@
 import { Fragment } from 'preact'
 import { useEffect, useErrorBoundary, useRef, useState } from 'preact/hooks'
 
-import type { Annotation, Snapshot, Status } from '@redline/shared'
+import type { Annotation, Reply, Snapshot, Status } from '@redline/shared'
 
 import { DEVICES, WINDOW } from '@/src/devices.ts'
 import { badgeFor, fillPath } from '@/src/geometry.ts'
 import { type Request, send } from '@/src/messages.ts'
-import type { Session } from '@/src/state/session.ts'
+import { type Session, answersOf } from '@/src/state/session.ts'
 
 import { type ActiveTab, useActiveTab, useBridge, useImage, useSession } from './hooks.ts'
 
@@ -17,6 +17,12 @@ export function App() {
   const tab = useActiveTab()
   const session = useSession(tab?.id)
   const bridge = useBridge(Boolean(session?.pending))
+  // Claude's reply to this session's last round, as the bridge serves it: kept in the session
+  const reply = bridge?.reply
+  useEffect(() => {
+    if (tab && session && reply && reply.sessionId === session.id && reply.round === session.lastSent?.round && session.reply?.round !== reply.round)
+      void send({ type: 'reply/store', tabId: tab.id, reply }).catch(() => undefined)
+  }, [tab?.id, session?.id, session?.lastSent?.round, session?.reply?.round, reply?.sessionId, reply?.round])
   const [error, setError] = useState<string>()
 
   const ask = (request: Request) => {
@@ -168,7 +174,7 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
   const tabId = tab.id
   const locked = Boolean(session.pending)
   const marks = session.snapshots.reduce((n, s) => n + s.annotations.length, 0)
-  const canSend = session.snapshots.length > 0 || session.comment.trim() !== ''
+  const canSend = session.snapshots.length > 0 || session.comment.trim() !== '' || answersOf(session).length > 0
 
   return (
     <div class="session">
@@ -188,7 +194,8 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
         </div>
       )}
 
-      {session.snapshots.length === 0 && <Help />}
+      {session.reply && <ReplyView tabId={tabId} session={session} reply={session.reply} ask={ask} disabled={locked} />}
+      {session.snapshots.length === 0 && !session.reply && <Help />}
       {session.snapshots.map((snapshot) => (
         <SnapshotView key={snapshot.id} tabId={tabId} session={session} snapshot={snapshot} ask={ask} disabled={locked} />
       ))}
@@ -214,6 +221,40 @@ function SessionView({ tab, session, ask }: { tab: ActiveTab; session: Session; 
         </div>
       </footer>
     </div>
+  )
+}
+
+// What Claude did of the last round's marks, and what it asks: an answer to each question goes
+// with the next round.
+function ReplyView({ tabId, session, reply, ask, disabled }: { tabId: number; session: Session; reply: Reply; ask: Ask; disabled: boolean }) {
+  return (
+    <section class="reply">
+      <h2>Claude, on round {reply.round}</h2>
+      {reply.summary && <p class="summary">{reply.summary}</p>}
+      {reply.marks?.length ? (
+        <ul class="reply-marks">
+          {reply.marks.map((m) => (
+            <li key={m.id}>
+              <span class="badge plain">#{m.id}</span> {m.text}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {reply.questions?.map((q) => (
+        <div key={q.id} class="question">
+          <p>
+            <strong>{q.id}</strong>
+            {q.mark && <span class="meta"> about #{q.mark}</span>} {q.text}
+          </p>
+          <CommentBox
+            value={session.answers?.[q.id] ?? ''}
+            placeholder="Your answer"
+            disabled={disabled}
+            onSave={(answer) => ask({ type: 'answer/set', tabId, question: q.id, answer })}
+          />
+        </div>
+      ))}
+    </section>
   )
 }
 

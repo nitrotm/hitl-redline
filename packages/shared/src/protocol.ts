@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { Reply } from './schema.ts'
+
 // How the extension talks to `redline wait`: HTTP on the loopback, one round per run.
 
 export const DEFAULT_PORT = 47390
@@ -24,6 +26,8 @@ export const Status = z.object({
   url: z.string().optional(),
   // the base URL of the extension that last asked (EXTENSION_HEADER), for `redline status`
   extension: z.string().optional(),
+  // Claude's reply to the last round (`redline wait --reply`), for the sidebar
+  reply: Reply.optional(),
 })
 export type Status = z.infer<typeof Status>
 

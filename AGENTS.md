@@ -68,6 +68,9 @@ nix flake check         # builds the workspace: typecheck and tests included
   with its mark (`badge`); without one, `badgeFor` puts it in the usual place.
 - **A round is sent by the background** (`flush()`), from the session at the time it is sent, and
   sent again by the alarm, or by the sidebar once it sees a bridge, until one takes it.
+- **Claude's reply** (`Reply`) goes the other way: `redline wait --reply FILE` serves it with its
+  status, the sidebar stores it in the session (`session.reply`) if it is to its last round sent,
+  and the answers to its questions (`session.answers`) go with the next round (`answers`).
 - **The bridge takes one round and exits.** That exit is what wakes Claude (a background task).
 
 ## Rules

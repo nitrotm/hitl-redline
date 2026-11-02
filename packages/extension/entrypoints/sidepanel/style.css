@@ -302,6 +302,44 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* Claude's reply to the last round */
+.reply {
+  background: color-mix(in srgb, var(--ok) 6%, var(--bg));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reply h2 {
+  margin: 0;
+}
+
+.reply p {
+  margin: 0;
+}
+
+.reply-marks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.badge.plain {
+  display: inline-block;
+  background: var(--muted);
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
 /* the screenshot shown on the page, being annotated */
 .thumb.on {
   border-color: var(--accent);

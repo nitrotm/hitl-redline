@@ -80,6 +80,11 @@ export function renderFeedback(round: FeedbackRound, project?: string): string {
   lines.push(`- Snapshots: ${round.snapshots.length}, annotations: ${round.snapshots.reduce((n, s) => n + s.annotations.length, 0)}`)
   lines.push('')
   if (round.comment.trim()) lines.push('## General comment', '', quote(round.comment), '')
+  const answers = (round.answers ?? []).filter((a) => a.answer.trim())
+  if (answers.length) {
+    lines.push("## Answers to Claude's questions", '')
+    for (const a of answers) lines.push(`- **${a.question}**${a.mark ? ` (about #${a.mark})` : ''}: ${oneLine(a.text, 200)}`, '', quote(a.answer, '  '), '')
+  }
 
   for (const snapshot of round.snapshots) lines.push(...renderSnapshot(snapshot, project))
 

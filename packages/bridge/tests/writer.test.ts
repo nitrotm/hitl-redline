@@ -102,3 +102,10 @@ describe('rendered', () => {
     expect(renderFeedback(round)).toContain('  - Preact: `… › C › D › E › F › G`')
   })
 })
+
+describe('answers', () => {
+  it("are written with Claude's questions", () => {
+    const md = renderFeedback(makeRound({ answers: [{ question: 'Q1', text: 'Which John?', mark: 2, answer: 'The signed-in user' }] }))
+    expect(md).toContain("## Answers to Claude's questions\n\n- **Q1** (about #2): Which John?\n\n  > The signed-in user")
+  })
+})

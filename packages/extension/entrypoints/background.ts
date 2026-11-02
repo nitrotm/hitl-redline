@@ -3,7 +3,7 @@ import { type Rendered, isUnder } from '@redline/shared'
 import { BridgeError, bridgeStatus, postRound } from '@/src/bridge-client.ts'
 import { composite, crop } from '@/src/capture/composite.ts'
 import { inspectPage } from '@/src/frameworks.ts'
-import type { CaptureResult, ContentRequest, PreparedCapture, Reply, Request, Responses } from '@/src/messages.ts'
+import type { CaptureResult, ContentRequest, PreparedCapture, Request, Responses, Result } from '@/src/messages.ts'
 import { deleteImage, deleteSessionImages, getImage, putImage } from '@/src/state/images.ts'
 import {
   type Session,
@@ -18,7 +18,9 @@ import {
   roundFailed,
   roundSent,
   selectAnnotation,
+  setAnswer,
   setTool,
+  storeReply,
   takeSnapshot,
   undo,
   updateAnnotation,
@@ -36,8 +38,8 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((request: Request, sender) => {
     const tabId = 'tabId' in request && request.tabId !== undefined ? request.tabId : sender.tab?.id
     return handle(request, tabId).then(
-      (value): Reply<unknown> => ({ ok: true, value }),
-      (error: unknown): Reply<unknown> => ({ ok: false, error: error instanceof Error ? error.message : String(error) })
+      (value): Result<unknown> => ({ ok: true, value }),
+      (error: unknown): Result<unknown> => ({ ok: false, error: error instanceof Error ? error.message : String(error) })
     )
   })
 
@@ -123,6 +125,10 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
     }
     case 'comment/set':
       return change(tabId, (s) => ({ ...s, comment: request.comment }))
+    case 'reply/store':
+      return change(tabId, (s) => storeReply(s, request.reply))
+    case 'answer/set':
+      return change(tabId, (s) => setAnswer(s, request.question, request.answer))
     case 'round/submit':
       await change(tabId, (s) => queueRound(s, request.status, new Date().toISOString()))
       await flush()

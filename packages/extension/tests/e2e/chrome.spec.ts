@@ -1,5 +1,5 @@
 import { type BrowserContext, chromium, expect, test } from '@playwright/test'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { type Bridge, EXTENSION, expectRound, readPng, serveFixtures, startBridge } from './helpers.ts'
@@ -149,6 +149,34 @@ test('screenshot, draw, comment and send a round', async () => {
   await sidebar.getByRole('button', { name: /^Send to Claude/ }).click()
   await expectRound(bridge, expect)
   await expect(sidebar.locator('.note.sent')).toContainText('Round 1 sent')
+
+  // Claude replies, with what it did and a question: the sidebar shows them, and the answer goes
+  // with the next round
+  const first = bridge.dir
+  const { sessionId } = JSON.parse(await readFile(join(first, 'rounds', '001', 'feedback.json'), 'utf8'))
+  const replyFile = join(first, 'reply.json')
+  await writeFile(
+    replyFile,
+    JSON.stringify({
+      sessionId,
+      round: 1,
+      summary: 'Two changes.',
+      marks: [{ id: 1, text: 'padding 8 → 16px' }],
+      questions: [{ id: 'Q1', text: 'How much less space?', mark: 2 }],
+    })
+  )
+  bridge = await startBridge(fixtures.url, ['--reply', replyFile])
+  await expect(sidebar.locator('.reply')).toContainText('padding 8 → 16px')
+  await expect(sidebar.locator('.question')).toContainText('How much less space?')
+  await sidebar.locator('.question textarea').fill('Half of it')
+  await sidebar.locator('.question textarea').blur()
+  await sidebar.getByRole('button', { name: /^Send to Claude/ }).click()
+  const { code, stdout } = await bridge.done
+  expect(code, stdout).toBe(0)
+  const answered = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
+  expect(answered).toContain("## Answers to Claude's questions\n\n- **Q1** (about #2): How much less space?\n\n  > Half of it")
+  await expect(sidebar.locator('.reply')).toHaveCount(0)
+
   await sidebar.close()
   await page.close()
 })

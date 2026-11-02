@@ -96,6 +96,9 @@ screenshots of the round, and the marks of each with their comment:
   the live page.
 - Write a comment on the round as a whole, then **Send to Claude**, or **Done** to end the loop.
 
+Claude replies in the sidebar: what it did of each mark, and its questions, each with a field to
+answer it. The answers go with the next round, which may hold only them.
+
 A round waits in the browser until Claude listens. The bar at the bottom of the sidebar tells
 whether it does.
 

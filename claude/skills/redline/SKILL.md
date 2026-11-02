@@ -1,14 +1,15 @@
 ---
 name: redline
 description: >-
-  The way to review a user interface with the user: open the dev server's page in Firefox
-  (firefox-devtools MCP) with the Redline extension, wait for the user's screenshots annotated with
-  numbered marks (#1, #2…) and comments, apply each change so the user sees it at once, reply in
-  their sidebar, and wait again. Use it whenever the user wants to review, look at, check or give
-  feedback on a page or the UI ("review the user interface", "show me the page and I'll tell you
-  what to change", "mark up", "annotate"), rather than reviewing it yourself from screenshots, and
-  when they run /redline. It is a continuous session: round after round, until the user sends a
-  round with nothing to change (Done, or Ctrl+D with nothing to send).
+  How to show the user a page of the app being developed, and take their feedback: open the dev
+  server's page in Firefox (firefox-devtools MCP) with the Redline extension, so they can mark it up
+  (numbered marks #1, #2… with comments) and send it back; apply each change so they see it at once,
+  reply in their sidebar, and wait again. Use it whenever the user wants to see, preview, demo,
+  review, look at, check or give feedback on a page or the UI ("show me a preview", "let me see the
+  pages in action", "review the user interface", "show me the page and I'll tell you what to
+  change"), rather than taking and describing screenshots yourself, and when they run /redline. It
+  is a continuous session: round after round, until the user sends a round with nothing to change
+  (Done, or Ctrl+D with nothing to send).
 argument-hint: '[preview URL]'
 allowed-tools: Bash(redline:*)
 ---
@@ -19,6 +20,12 @@ The user reviews the page you are developing in Firefox, with the Redline extens
 screenshots of it, draw rectangles, arrows and freehand marks on them, comment on each mark
 (`#1`, `#2`…), and send the round to you. You apply it, reload the page, reply in their sidebar,
 and wait for the next round.
+
+## Showing a page is opening it with Redline
+
+Whenever you open a page of the app in Firefox for the user to see, open it the Redline way (step 2):
+a preview or a demo is a review too, the user's feedback may come at any time. Describe what is on
+the page in a few lines if useful, but do not stop there: start the wait, and let them mark it up.
 
 ## The session
 
@@ -49,6 +56,13 @@ as short as possible:
 
 The browser is the one of the **firefox-devtools** MCP server: use its tools (`install_extension`,
 `new_page`, `navigate_page`, `list_pages`, `select_page`, `screenshot_page`).
+
+**Never maximize, resize or otherwise change the size of the Firefox window**: no
+`set_viewport_size`, no window resizing of any kind. The window is on the user's screen, laid out
+with their other windows, and changing its size breaks their screen. To see the page at another
+size, the user picks a device in Redline's sidebar (phone, tablet, laptop, desktop), which shows it
+in a frame of that size in the same window; to see more of a page, scroll it and take another
+screenshot.
 
 ## 1. Find the preview
 

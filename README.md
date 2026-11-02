@@ -111,6 +111,9 @@ Each round lands in the project:
 
 Add `.redline/` to the project's `.gitignore` (`/redline` does).
 
+Each `#id` badge goes where it hides the least: of the places around its mark, the one with the
+least to see on the screenshot, and no other mark.
+
 Mark ids are never reused in a session: `#7` is the same mark in every snapshot and every round.
 
 ## Develop

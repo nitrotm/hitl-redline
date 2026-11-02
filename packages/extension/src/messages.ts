@@ -1,4 +1,4 @@
-import type { Annotation, RoundStatus, Target, Viewport } from '@redline/shared'
+import type { Annotation, Point, RoundStatus, Target, Viewport } from '@redline/shared'
 
 import type { Tool } from './state/session.ts'
 
@@ -6,7 +6,7 @@ import type { Tool } from './state/session.ts'
 // request without tabId is for the tab of its sender: the overlay's.
 
 export type NewAnnotation = Annotation extends infer A ? (A extends Annotation ? Omit<A, 'id' | 'comment'> : never) : never
-export type AnnotationPatch = { comment?: string; color?: string; target?: Target } & (
+export type AnnotationPatch = { comment?: string; color?: string; target?: Target; badge?: Point } & (
   | { rect?: Extract<Annotation, { kind: 'rect' }>['rect'] }
   | { from?: Extract<Annotation, { kind: 'arrow' }>['from']; to?: Extract<Annotation, { kind: 'arrow' }>['to'] }
   | { strokes?: Extract<Annotation, { kind: 'freehand' }>['strokes'] }

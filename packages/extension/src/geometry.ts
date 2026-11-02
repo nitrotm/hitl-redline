@@ -24,6 +24,7 @@ export function rectFromCorners(a: Point, b: Point): Rect {
 }
 
 export function translate(annotation: Annotation, dx: number, dy: number): Annotation {
+  if (annotation.badge) return { ...translate({ ...annotation, badge: undefined }, dx, dy), badge: { x: annotation.badge.x + dx, y: annotation.badge.y + dy } }
   if (annotation.kind === 'rect') return { ...annotation, rect: { ...annotation.rect, x: annotation.rect.x + dx, y: annotation.rect.y + dy } }
   if (annotation.kind === 'arrow')
     return { ...annotation, from: { x: annotation.from.x + dx, y: annotation.from.y + dy }, to: { x: annotation.to.x + dx, y: annotation.to.y + dy } }
@@ -79,9 +80,15 @@ export interface Badge {
 
 // The badge sits where it hides the least of what the mark points at: outside the top left corner
 // of the shape's box, or behind an arrow's tail; inside the page when the shape touches its edge.
+export function badgeWidth(id: number): number {
+  return Math.round(10 + `#${id}`.length * 7.5)
+}
+
 export function badgeFor(annotation: Annotation): Badge {
   const label = `#${annotation.id}`
-  const width = Math.round(10 + label.length * 7.5)
+  const width = badgeWidth(annotation.id)
+  // placed where it hides the least, when drawn (src/badge-place.ts)
+  if (annotation.badge) return { ...annotation.badge, width, height: BADGE_HEIGHT, label, fontSize: BADGE_FONT_SIZE }
   let center: Point
   if (annotation.kind === 'arrow') {
     const { from, to } = annotation

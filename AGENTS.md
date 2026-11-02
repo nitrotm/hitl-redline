@@ -54,7 +54,9 @@ nix flake check         # builds the workspace: typecheck and tests included
   scroll it was taken at. The writer turns them back into screenshot coordinates.
 - **The overlay, the sidebar's preview and the composite draw the same shapes**: `src/geometry.ts`
   gives the paths and the badge's box to all three. Change it there, not in one of them. The
-  composite is made when the round is sent; only the clean screenshot is stored.
+  composite is made when the round is sent; only the clean screenshot is stored. A badge's place
+  is chosen once, by the overlay, from the screenshot's pixels (`src/badge-place.ts`), and stored
+  with its mark (`badge`); without one, `badgeFor` puts it in the usual place.
 - **A round is sent by the background** (`flush()`), from the session at the time it is sent, and
   sent again by the alarm, or by the sidebar once it sees a bridge, until one takes it.
 - **The bridge takes one round and exits.** That exit is what wakes Claude (a background task).

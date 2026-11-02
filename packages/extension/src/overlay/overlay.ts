@@ -1,5 +1,6 @@
 import type { Annotation, Point, Snapshot } from '@redline/shared'
 
+import { type Busy, busyness, placeBadge } from '../badge-place.ts'
 import { deviceOf } from '../devices.ts'
 import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, rectFromCorners, strokesPath, translate } from '../geometry.ts'
 import { type ContentRequest, type NewAnnotation, type PreparedCapture, send } from '../messages.ts'
@@ -158,12 +159,34 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     drawShapes()
   }
 
+  // the screenshot's pixels, to place the badges where they hide the least
+  let busy: Busy | undefined
+
   function loadImage(snapshotId: string) {
     shownImage = snapshotId
+    busy = undefined
     image.removeAttribute('href')
-    send({ type: 'snapshot/image', snapshotId }).then((png) => {
-      if (shownImage === snapshotId) image.setAttribute('href', png)
+    send({ type: 'snapshot/image', snapshotId }).then(async (png) => {
+      if (shownImage !== snapshotId) return
+      image.setAttribute('href', png)
+      const bitmap = await createImageBitmap(await (await fetch(png)).blob())
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(bitmap, 0, 0)
+      const shown = snapshot
+      if (shownImage !== snapshotId || !shown) return
+      const { width, scrollX, scrollY } = shown.viewport
+      busy = busyness(ctx.getImageData(0, 0, bitmap.width, bitmap.height), bitmap.width / width, { x: scrollX, y: scrollY })
+      bitmap.close()
     }, report)
+  }
+
+  // the badge of a mark, where it hides the least of the screenshot and of the other marks
+  function badgeOf(annotation: Annotation): Point | undefined {
+    if (!busy || !snapshot) return undefined
+    const { width, height, scrollX, scrollY } = snapshot.viewport
+    const others = snapshot.annotations.filter((a) => a.id !== annotation.id)
+    return placeBadge(annotation, others, busy, { x: scrollX, y: scrollY, width, height })
   }
 
   // The marks' elements, kept from one drawing to the next while a mark's shape and color stay: a
@@ -262,8 +285,12 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
         }
         return drawShapes()
       }
-      const moved = translate(annotation, done.dx, done.dy)
-      const patch = moved.kind === 'rect' ? { rect: moved.rect } : moved.kind === 'arrow' ? { from: moved.from, to: moved.to } : { strokes: moved.strokes }
+      const translated = translate(annotation, done.dx, done.dy)
+      // its badge, placed again where it is now
+      const badge = badgeOf({ ...translated, badge: undefined })
+      const moved = badge ? { ...translated, badge } : translated
+      const shape = moved.kind === 'rect' ? { rect: moved.rect } : moved.kind === 'arrow' ? { from: moved.from, to: moved.to } : { strokes: moved.strokes }
+      const patch = { ...shape, ...(moved.badge && { badge: moved.badge }) }
       // until the background's answer comes back through storage, it stays where it was dropped
       snapshot = { ...snapshot, annotations: snapshot.annotations.map((a) => (a.id === done.id ? moved : a)) }
       drawShapes()
@@ -300,7 +327,10 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     preview.replaceChildren()
   }
 
-  function addDrawn(annotation: NewAnnotation) {
+  function addDrawn(drawnAnnotation: NewAnnotation) {
+    // its badge sized for the id it is about to get
+    const badge = badgeOf({ ...drawnAnnotation, id: session.nextAnnotationId, comment: '' } as Annotation)
+    const annotation = badge ? { ...drawnAnnotation, badge } : drawnAnnotation
     const drawn = { ...annotation, id: NEW, comment: '' } as Annotation
     const target = targetOf(drawn)
     // drawn at once, and its comment open at once, to type into: its id comes from the background

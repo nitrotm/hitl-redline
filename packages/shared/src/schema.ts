@@ -33,6 +33,8 @@ const annotationBase = {
   color: z.string(),
   comment: z.string(),
   target: Target.optional(),
+  // the top left corner of its #id badge, where it hides the least (none: the usual place)
+  badge: Point.optional(),
 }
 
 export const RectAnnotation = z.object({ ...annotationBase, kind: z.literal('rect'), rect: Rect })

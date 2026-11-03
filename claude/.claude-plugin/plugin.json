@@ -1,6 +1,6 @@
 {
   "name": "redline",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "/redline: open the preview in the browser, wait for screenshots annotated with the Redline extension, apply the feedback, and wait again.",
   "author": {
     "name": "Antony Ducommun"

@@ -92,6 +92,9 @@ For Claude Code; [docs/install.md](docs/install.md) has the other agents, browse
    git clone https://github.com/nitrotm/hitl-redline && cd hitl-redline && yarn install && yarn build
    ```
 
+   In a NixOS or home-manager configuration, it is a flake input: see
+   [With Nix](docs/install.md#with-nix).
+
 2. **Pair your browsers**, once: `redline install` makes your token and the native messaging host
    that hands it to the extension.
 

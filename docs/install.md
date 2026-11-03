@@ -4,17 +4,57 @@ The [quick start](../README.md#quick-start) has the shortest way, for Claude Cod
 
 ## The bridge
 
-With Nix:
+### With Nix
+
+This repository is a flake, `github:nitrotm/hitl-redline`. Its packages, for each system:
+
+- `redline` (the default): `bin/redline`, which knows the extension of the same build
+  (`redline extension-path`), and the native host's manifest for Firefox, in
+  `lib/mozilla/native-messaging-hosts`.
+- `redline-extension`: the extension, unpacked (`firefox/`, `chrome/`) and packed (`redline.xpi`).
+
+To try it, or to put it in your profile:
 
 ```sh
-nix build github:nitrotm/hitl-redline#redline            # bin/redline, which knows the extension of the same build
-nix build github:nitrotm/hitl-redline#redline-extension  # firefox/, chrome/, redline.xpi
+nix run github:nitrotm/hitl-redline -- --help
+nix profile install github:nitrotm/hitl-redline
+nix build github:nitrotm/hitl-redline#redline-extension   # ./result/firefox, ./result/chrome, ./result/redline.xpi
 ```
 
-Or add `packages.<system>.redline` of this flake (`github:nitrotm/hitl-redline`) to your
-home-manager packages.
+In the flake of your NixOS or home-manager configuration, add it to the inputs:
 
-Without Nix (macOS, Windows, any Linux), with Node 22.18 or later:
+```nix
+{
+  inputs.redline.url = "github:nitrotm/hitl-redline";
+}
+```
+
+then use its package, `inputs.redline.packages.${pkgs.stdenv.hostPlatform.system}.redline`,
+here `redline`:
+
+```nix
+# home-manager
+home.packages = [ redline ];
+programs.firefox.nativeMessagingHosts = [ redline ];
+
+# or NixOS
+environment.systemPackages = [ redline ];
+programs.firefox.nativeMessagingHosts.packages = [ redline ];
+```
+
+With the native host from the package, Firefox needs no `redline install`: the host makes your
+token the first time the extension asks for it. Chrome and Chromium still need `redline install`
+(the package has Firefox's manifest only). That command writes a host script with the store paths
+of the `redline` that runs it: after an update, run it again, before a garbage collection takes
+the old ones away.
+
+The flake pins its own nixpkgs (the release it is built and tested with). With
+`inputs.redline.inputs.nixpkgs.follows = "nixpkgs"`, it builds with yours instead, which shares
+Node with the rest of your system, but is not what the tests ran on.
+
+### Without Nix
+
+On macOS, Windows or any Linux, with Node 22.18 or later:
 
 ```sh
 git clone https://github.com/nitrotm/hitl-redline && cd hitl-redline
@@ -27,6 +67,8 @@ and put that `node …/redline.mjs` on your `PATH` as `redline`: an alias or a s
 `redline extension-path` finds the extension's build next to it, or `REDLINE_EXTENSION` names
 another.
 
+### Pairing
+
 Then pair your browsers with you, once:
 
 ```sh
@@ -34,10 +76,11 @@ redline install
 ```
 
 It makes your token (see [Security](security.md)) and installs the native messaging host that hands
-it to the extension, for Firefox, and for Chrome and Chromium if they are there. With home-manager,
-`programs.firefox.nativeMessagingHosts = [ redline ]` installs the host instead (the package has
-its manifest). Where the browser cannot run a native host (Firefox as a Snap or a Flatpak without
+it to the extension, for Firefox, and for Chrome and Chromium if they are there. With Nix, the
+package can install Firefox's host instead (see [With Nix](#with-nix)). Where the browser cannot run a native host (Firefox as a Snap or a Flatpak without
 the WebExtensions portal), the sidebar asks for the token: paste what `redline token` prints.
+
+### The skill
 
 Then the skill, for your agent:
 

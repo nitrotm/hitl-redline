@@ -148,8 +148,8 @@ describe('waitForRound', () => {
 
   it('stops with the error when the round cannot be written', async () => {
     const root = await mkdtemp(join(tmpdir(), 'redline-'))
-    // a file where the rounds' directory goes
-    await writeFile(join(root, 'rounds'), '')
+    // a file where the channel's directory goes
+    await writeFile(join(root, 'brave-cat'), '')
     const { port, received } = await listen({ root })
     const outcome = received.then(
       () => 'written',
@@ -218,7 +218,7 @@ describe('redline wait', () => {
     expect((await raw(port, '/rounds', 'POST', body, { 'content-type': 'application/json', [HEADERS.auth]: auth })).status).toBe(200)
     expect(await wait.exit).toBe(0)
     expect(wait.stdout()).toContain('round 1 of session session-1: feedback, 1 snapshot, 2 annotations')
-    expect(wait.stdout().trim().split('\n').at(-1)).toBe(join(dir, 'rounds', '001', 'feedback.md'))
+    expect(wait.stdout().trim().split('\n').at(-1)).toBe(join(dir, channel, '001', 'feedback.md'))
   })
 
   it("keeps a session's channel, and stops its last wait, not another session's", async () => {
@@ -282,6 +282,9 @@ describe('any agent', () => {
       child.stdout.on('data', (chunk: Buffer) => (out += chunk))
       child.on('exit', () => resolve(out.trim()))
     })
+    // beside the channel's rounds
+    expect(replyFile).toMatch(/\/[a-z]+-[a-z]+\/reply\.json$/)
+    expect(dirname(dirname(replyFile))).toBe(dir)
     await mkdir(dirname(replyFile), { recursive: true })
     await writeFile(replyFile, JSON.stringify(reply))
 

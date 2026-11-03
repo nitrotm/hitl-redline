@@ -23,6 +23,7 @@ import {
   undo,
   updateAnnotation,
   upgradeSession,
+  windowChannel,
 } from '../../src/state/session.ts'
 
 const viewport = { width: 1000, height: 800, dpr: 2, scrollX: 0, scrollY: 0 }
@@ -243,6 +244,22 @@ describe('channels', () => {
     expect(bindChannel(createSession(1, 's'), 'calm-dog').channel).toBe('calm-dog')
     const session = createSession(1, 's', 'brave-cat')
     expect(bindChannel(session, 'brave-cat')).toBe(session)
+  })
+
+  it("name a window by its active tab's, else by the one its tabs share", () => {
+    const cat = createSession(1, 's1', 'brave-cat')
+    const dog = createSession(2, 's2', 'calm-dog')
+    const unbound = createSession(3, 's3')
+    expect(windowChannel(dog, [cat, dog])).toBe('calm-dog')
+    expect(windowChannel(unbound, [cat, unbound])).toBe('brave-cat')
+    expect(windowChannel(undefined, [cat])).toBe('brave-cat')
+    expect(windowChannel(unbound, [cat, dog, unbound])).toBeUndefined()
+    expect(windowChannel(undefined, [])).toBeUndefined()
+  })
+
+  it('name no window by a review that ended', () => {
+    const done = roundSent(queueRound(bindChannel(drawn(10), 'brave-cat'), 'done', 'now'), '/p/.redline/brave-cat/001', 'now')
+    expect(windowChannel(done, [done])).toBeUndefined()
   })
 })
 

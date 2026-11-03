@@ -183,6 +183,6 @@ test('name the Preact components of a mark, and where its JSX is', async () => {
 
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)
-  const md = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
+  const md = await readFile(join(bridge.dir, bridge.channel, '001', 'feedback.md'), 'utf8')
   expect(md).toContain('  - Preact: `App › Hero › Button`, its JSX at `/project/src/App.tsx:3:5`')
 })

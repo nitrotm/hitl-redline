@@ -161,7 +161,7 @@ test('screenshot, draw, comment and send a round', async () => {
   // Claude replies, with what it did and a question: the sidebar shows them, and the answer goes
   // with the next round
   const first = bridge.dir
-  const { sessionId } = JSON.parse(await readFile(join(first, 'rounds', '001', 'feedback.json'), 'utf8'))
+  const { sessionId } = JSON.parse(await readFile(join(first, bridge.channel, '001', 'feedback.json'), 'utf8'))
   const replyFile = join(first, 'reply.json')
   await writeFile(
     replyFile,
@@ -184,7 +184,7 @@ test('screenshot, draw, comment and send a round', async () => {
   await sidebar.getByRole('button', { name: /^Send to Claude/ }).click()
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)
-  const answered = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
+  const answered = await readFile(join(bridge.dir, bridge.channel, '001', 'feedback.md'), 'utf8')
   expect(answered).toContain('## Answers to your questions\n\n- **Q1** (about #2): How much less space?\n\n  > Half of it')
   await expect(sidebar.locator('.reply')).toHaveCount(0)
 
@@ -231,7 +231,7 @@ test('show the page as a phone, and capture it so', async () => {
 
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)
-  const round = join(bridge.dir, 'rounds', '001')
+  const round = join(bridge.dir, bridge.channel, '001')
   const md = await readFile(join(round, 'feedback.md'), 'utf8')
   expect(md).toContain('- Viewport: 393×852 CSS px, as a Phone (iPhone 15)')
   expect(md).toContain('> Too wide on a phone')
@@ -268,7 +268,7 @@ test('name the Preact components of a mark, and where its JSX is', async () => {
 
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)
-  const md = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
+  const md = await readFile(join(bridge.dir, bridge.channel, '001', 'feedback.md'), 'utf8')
   expect(md).toContain('  - Preact: `App › Hero › Button`, its JSX at `/project/src/App.tsx:3:5`')
 })
 
@@ -301,7 +301,7 @@ test('two Claude sessions on the same app: each tab sends to its own, and waits 
 
   await markAndSend(pageB, 'For B')
   expect((await b.done).code).toBe(0)
-  expect(await readFile(join(b.dir, 'rounds', '001', 'feedback.md'), 'utf8')).toContain('> For B')
+  expect(await readFile(join(b.dir, b.channel, '001', 'feedback.md'), 'utf8')).toContain('> For B')
 
   // A's screenshot, then A's Claude goes to work (no wait), while B's waits again: A's round
   // stays in the browser, rather than go to B
@@ -332,7 +332,7 @@ test('two Claude sessions on the same app: each tab sends to its own, and waits 
   await extensionPage.evaluate(() => (globalThis as unknown as Runtime).chrome.runtime.sendMessage({ type: 'outbox/flush' }))
   const { code, stdout } = await a.done
   expect(code, stdout).toBe(0)
-  expect(await readFile(join(a.dir, 'rounds', '001', 'feedback.md'), 'utf8')).toContain('> For A')
+  expect(await readFile(join(a.dir, a.channel, '001', 'feedback.md'), 'utf8')).toContain('> For A')
   expect(b2.process.exitCode).toBeNull()
   b2.process.kill()
   await pageA.close()

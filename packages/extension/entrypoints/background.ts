@@ -28,8 +28,9 @@ import {
   takeSnapshot,
   undo,
   updateAnnotation,
+  windowChannel,
 } from '@/src/state/session.ts'
-import { getSession, getSessions, update } from '@/src/state/store.ts'
+import { getSession, getSessions, update, watchSessions } from '@/src/state/store.ts'
 
 // The background owns the sessions: the overlay and the sidebar ask it for every change
 // (src/messages.ts), and watch storage for the result. It captures the screenshots, draws the
@@ -91,6 +92,16 @@ export default defineBackground(() => {
     }
   })
   browser.tabs.onRemoved.addListener((tabId) => void discard(tabId))
+
+  // Firefox's windows, named by the agent their tabs are for
+  if (import.meta.env.FIREFOX) {
+    const rename = () => void nameWindows()
+    watchSessions(rename)
+    browser.tabs.onActivated.addListener(rename)
+    browser.tabs.onAttached.addListener(rename)
+    browser.tabs.onDetached.addListener(rename)
+    rename()
+  }
 
   void browser.alarms.create(OUTBOX_ALARM, { periodInMinutes: 0.5 })
   browser.alarms.onAlarm.addListener((alarm) => {
@@ -319,6 +330,41 @@ async function reloadBound(sessions: Session[], bridges: Bridge[]) {
     await update(session.tabId, (s) => [s && markReloaded(s, nonce), null])
     await browser.tabs.reload(session.tabId).catch(() => undefined)
   }
+}
+
+// What each window's title starts with, as this run of the extension last set it: only a change
+// is set again.
+const prefaces = new Map<number, string>()
+let naming: Promise<void> = Promise.resolve()
+
+// Firefox puts a text before a window's title (`titlePreface`): the channel of the agent its tabs
+// are for (windowChannel), the name `redline wait` gives the agent's pane in Herdr too, so that
+// the user tells which window is which agent's. One run at a time, in the order asked.
+function nameWindows(): Promise<void> {
+  const run = naming.then(async () => {
+    const windows = browser.windows as unknown as { update(windowId: number, info: { titlePreface: string }): Promise<unknown> }
+    const sessions = await getSessions()
+    const all = await browser.tabs.query({})
+    const byWindow = new Map<number, typeof all>()
+    for (const tab of all) byWindow.set(tab.windowId!, [...(byWindow.get(tab.windowId!) ?? []), tab])
+    for (const [windowId, tabs] of byWindow) {
+      const active = tabs.find((t) => t.active)
+      const channel = windowChannel(
+        active?.id === undefined ? undefined : sessions[active.id],
+        tabs.flatMap((t) => (t.id !== undefined && sessions[t.id] ? [sessions[t.id]!] : []))
+      )
+      const preface = channel ? `[${channel}] ` : ''
+      // a window not named yet by this run of the extension is named once, whatever it shows
+      if (prefaces.get(windowId) === preface) continue
+      await windows.update(windowId, { titlePreface: preface }).catch(() => undefined)
+      prefaces.set(windowId, preface)
+    }
+    // the windows closed since
+    for (const windowId of prefaces.keys()) if (!byWindow.has(windowId)) prefaces.delete(windowId)
+  })
+  // a run that failed does not stop the next
+  naming = run.catch(() => undefined)
+  return naming
 }
 
 function openSidebar(windowId: number) {

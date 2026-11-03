@@ -10,23 +10,23 @@ runs the review loop. See [README.md](README.md) for what it does, and
 
 ## Layout
 
-| Path                             | What                                                                                                                                                                                                                                    |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared`                | The contract: zod schemas of a round (`schema.ts`), the HTTP protocol and its MACs (`protocol.ts`), bounding boxes                                                                                                                      |
-| `packages/bridge`                | `redline`: `wait` (a one-shot loopback server, `server.ts`), the round on disk (`writer.ts`), the token (`home.ts`), the channels (`channels.ts`), the native host and `install` (`native.ts`), the agent session (`agent.ts`), the CLI |
-| `packages/extension`             | WXT: `entrypoints/` (background, overlay content script, sidepanel), `src/` (the rest)                                                                                                                                                  |
-| `packages/extension/src/state`   | Sessions: pure functions (`session.ts`), storage (`store.ts`), screenshots in IndexedDB (`images.ts`)                                                                                                                                   |
-| `packages/extension/src/overlay` | The drawing layer: SVG in a shadow root                                                                                                                                                                                                 |
-| `packages/extension/src/capture` | The annotated screenshot (OffscreenCanvas)                                                                                                                                                                                              |
-| `claude/`                        | The Claude Code plugin: `skills/redline/SKILL.md` is the review loop, and `/redline`. No command of the same name: in a plugin, both would be `redline:redline`, and the command would hide the skill                                   |
-| `packages/pi`                    | The pi package: the skill, and the `redline_wait` tool that starts a turn when a round comes (`src/index.ts`)                                                                                                                           |
-| `.agents/skills/redline`         | A link to the skill, where Codex reads skills                                                                                                                                                                                           |
-| `docs/agents.md`                 | The agent contract: the commands, their exit codes, the files, the reply, the ways to wait and to show pages                                                                                                                            |
-| `docs/`                          | The user's documentation (`install.md`, `usage.md`, `security.md`), and the README's pictures (`images/`, made by `yarn shots`: `packages/extension/tests/readme`)                                                                      |
-| `e2e-fixtures/`                  | A test page and its server                                                                                                                                                                                                              |
-| `scripts/version.mjs`            | The release's version, the same in every package and the plugin: `yarn bump X.Y.Z`                                                                                                                                                      |
-| `.github/workflows/ci.yml`       | CI: the flake's checks, lint, the end-to-end tests in both browsers; on main, the release                                                                                                                                               |
-| `nix/`                           | `workspace.nix` (yarn build + checks), `bridge.nix` (the `redline` wrapper, the native host and its manifest), `shell.nix` (the dev shell)                                                                                              |
+| Path                             | What                                                                                                                                                                                                                                                        |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared`                | The contract: zod schemas of a round (`schema.ts`), the HTTP protocol and its MACs (`protocol.ts`), bounding boxes                                                                                                                                          |
+| `packages/bridge`                | `redline`: `wait` (a one-shot loopback server, `server.ts`), the round on disk (`writer.ts`), the token (`home.ts`), the channels (`channels.ts`), the native host and `install` (`native.ts`), the agent session (`agent.ts`), Herdr (`herdr.ts`), the CLI |
+| `packages/extension`             | WXT: `entrypoints/` (background, overlay content script, sidepanel), `src/` (the rest)                                                                                                                                                                      |
+| `packages/extension/src/state`   | Sessions: pure functions (`session.ts`), storage (`store.ts`), screenshots in IndexedDB (`images.ts`)                                                                                                                                                       |
+| `packages/extension/src/overlay` | The drawing layer: SVG in a shadow root                                                                                                                                                                                                                     |
+| `packages/extension/src/capture` | The annotated screenshot (OffscreenCanvas)                                                                                                                                                                                                                  |
+| `claude/`                        | The Claude Code plugin: `skills/redline/SKILL.md` is the review loop, and `/redline`. No command of the same name: in a plugin, both would be `redline:redline`, and the command would hide the skill                                                       |
+| `packages/pi`                    | The pi package: the skill, and the `redline_wait` tool that starts a turn when a round comes (`src/index.ts`)                                                                                                                                               |
+| `.agents/skills/redline`         | A link to the skill, where Codex reads skills                                                                                                                                                                                                               |
+| `docs/agents.md`                 | The agent contract: the commands, their exit codes, the files, the reply, the ways to wait and to show pages                                                                                                                                                |
+| `docs/`                          | The user's documentation (`install.md`, `usage.md`, `security.md`), and the README's pictures (`images/`, made by `yarn shots`: `packages/extension/tests/readme`)                                                                                          |
+| `e2e-fixtures/`                  | A test page and its server                                                                                                                                                                                                                                  |
+| `scripts/version.mjs`            | The release's version, the same in every package and the plugin: `yarn bump X.Y.Z`                                                                                                                                                                          |
+| `.github/workflows/ci.yml`       | CI: the flake's checks, lint, the end-to-end tests in both browsers; on main, the release                                                                                                                                                                   |
+| `nix/`                           | `workspace.nix` (yarn build + checks), `bridge.nix` (the `redline` wrapper, the native host and its manifest), `shell.nix` (the dev shell)                                                                                                                  |
 
 ## Commands
 
@@ -81,7 +81,10 @@ yarn bump 1.2.0         # the version, in every file that has one (no argument: 
   `src/agent.ts`), in a registry in the user's redline home with the wait that listens for it.
   A new wait of a channel stops its last one (exit 3). A tab's session is bound to one
   (`session.channel`): when it starts, to the newest channel of the page's app that no other tab
-  holds (`bridgeForSession`), or to the one the user picks in the sidebar.
+  holds (`bridgeForSession`), or to the one the user picks in the sidebar. Its rounds go to
+  `.redline/<channel>/NNN/`, its reply beside them (`reply.json`). The user sees its name in the
+  sidebar, in Firefox's window title (`titlePreface`, `windowChannel`), and in Herdr, where the
+  wait names the agent of its pane (`src/herdr.ts`).
 - **The token** (`packages/bridge/src/home.ts`): a file only the user reads. The bridge and the
   extension prove they know it with HMACs (`mac`, `askBridge`, `roundAuth`), and the extension
   gets it from the native host the browser runs (`src/pairing.ts`, `redline install`), or pasted in
@@ -117,7 +120,7 @@ yarn bump 1.2.0         # the version, in every file that has one (no argument: 
 - **What the page tells is data**: `renderFeedback` writes the page's strings on one line, in code
   (`code()`), and the overlay ignores events that are not `isTrusted`.
 - **Tests never touch the user's redline home**: the bridge's and the end-to-end tests set
-  `REDLINE_HOME` to a temporary directory.
+  `REDLINE_HOME` to a temporary directory. Nor their Herdr: they unset `HERDR_PANE_ID`.
 - **Node runs the bridge's sources as they are** (type stripping): only erasable TypeScript there
   (no enums, no parameter properties), and imports with their `.ts` extension.
 - **No agent is assumed**: the UI and `feedback.md` name the agent by `--agent` ("your agent"

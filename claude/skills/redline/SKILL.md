@@ -72,7 +72,7 @@ so ("Send to Codex").
 
 ### How you wait
 
-`redline wait` listens for one round, writes it to `.redline/rounds/NNN/`, prints the path of its
+`redline wait` listens for one round, writes it to `.redline/<channel>/NNN/`, prints the path of its
 `feedback.md`, and exits. How its end reaches you depends on your agent:
 
 - **Claude Code**: run it with `run_in_background: true`, and add `--session ${CLAUDE_SESSION_ID}`.
@@ -149,7 +149,8 @@ The wait's first line names your **channel**, like `sleepy-gecko`, and the secon
 goes. Your session keeps that channel for every wait: other agent sessions may be reviewing with
 the user at the same time, even on the same app, and a tab is bound to the channel of the agent
 that opened it, which alone gets its rounds. Tell the user the channel's name, which the sidebar
-shows, so that they can tell their tabs apart.
+and Firefox's window title show (and Herdr, as your name there), so that they can tell their tabs
+apart.
 
 **A new `redline wait` of your session stops its last one**, which exits with code 3: start the
 new one, nothing else. Never `pkill` or `kill` a `redline wait`: the pattern also matches the shell
@@ -200,7 +201,7 @@ Then:
    each under its question.
 2. If the status is **done**, apply what the round holds (it may be empty), summarize the session,
    and stop: no new `redline wait`.
-3. Otherwise write your reply to the round where the wait said (`.redline/replies/<channel>.json`;
+3. Otherwise write your reply to the round where the wait said (`.redline/<channel>/reply.json`;
    `redline reply-path` prints it): your next wait shows it in the user's sidebar until they send
    the next round, with a field to answer each question.
 

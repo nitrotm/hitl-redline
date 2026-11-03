@@ -41,6 +41,15 @@ export function update<T = void>(
   return run
 }
 
+// every change of any session
+export function watchSessions(listener: () => void): () => void {
+  const onChanged = (changes: Record<string, unknown>, area: string) => {
+    if (area === 'local' && KEY in changes) listener()
+  }
+  browser.storage.onChanged.addListener(onChanged)
+  return () => browser.storage.onChanged.removeListener(onChanged)
+}
+
 export function watchSession(tabId: () => number | undefined, listener: (session: Session | undefined) => void): () => void {
   const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
     const id = tabId()

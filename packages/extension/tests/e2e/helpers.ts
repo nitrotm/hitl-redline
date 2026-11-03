@@ -15,6 +15,8 @@ const CLI = join(ROOT, 'packages/bridge/src/cli.ts')
 
 // the token and the channels of the tests' bridges, never the user's
 process.env.REDLINE_HOME = mkdtempSync(join(tmpdir(), 'redline-e2e-home-'))
+// nor their Herdr: a wait run in its pane would name the agent there after the tests' channel
+delete process.env.HERDR_PANE_ID
 
 export function token(): Promise<string> {
   return readOrCreateToken()
@@ -101,7 +103,7 @@ export async function expectRound(bridge: Bridge, expect: typeof import('@playwr
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)
   expect(stdout).toContain('feedback, 1 snapshot, 2 annotations')
-  const round = join(bridge.dir, 'rounds', '001')
+  const round = join(bridge.dir, bridge.channel, '001')
   const md = await readFile(join(round, 'feedback.md'), 'utf8')
   expect(md).toContain('**#1** rectangle')
   expect(md).toContain('> Make the button bigger')

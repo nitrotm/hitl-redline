@@ -44,7 +44,8 @@ programs.firefox.nativeMessagingHosts.packages = [ redline ];
 
 With the native host from the package, Firefox needs no `redline install`: the host makes your
 token the first time the extension asks for it. Chrome and Chromium still need `redline install`
-(the package has Firefox's manifest only). That command writes a host script with the store paths
+(the package has Firefox's manifest only); it leaves a manifest that is a link, such as
+home-manager's, as it is. That command writes a host script with the store paths
 of the `redline` that runs it: after an update, run it again, before a garbage collection takes
 the old ones away.
 

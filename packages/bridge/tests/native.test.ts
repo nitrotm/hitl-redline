@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -70,6 +70,22 @@ describe('redline install', () => {
       child.stdin.end(encodeNativeMessage({ type: 'token' }))
     })
     expect(JSON.parse(host.subarray(4).toString())).toEqual({ token: await readOrCreateToken() })
+  })
+
+  it.skipIf(process.platform === 'win32')("leaves a manifest that is a link: home-manager's, into the Nix store", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'redline-user-'))
+    const support =
+      process.platform === 'darwin'
+        ? join(home, 'Library', 'Application Support', 'Mozilla', 'NativeMessagingHosts')
+        : join(home, '.mozilla', 'native-messaging-hosts')
+    await mkdir(support, { recursive: true })
+    const theirs = join(home, 'store-redline_bridge.json')
+    await writeFile(theirs, '{"path": "/nix/store/…-redline/libexec/redline-native-host"}\n')
+    await symlink(theirs, join(support, 'redline_bridge.json'))
+    const { code, stdout } = await run(['install'], { HOME: home, XDG_CONFIG_HOME: join(home, '.config') })
+    expect(code, stdout.toString()).toBe(0)
+    expect(stdout.toString()).toContain(`a link to ${theirs}, left as it is`)
+    expect(await readFile(theirs, 'utf8')).toContain('/nix/store/')
   })
 })
 

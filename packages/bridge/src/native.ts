@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { access, mkdir, readdir, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readdir, readlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -139,6 +139,16 @@ export async function install(cli: string, profiles: string[] = []): Promise<str
     if (target.dir) {
       await mkdir(target.dir, { recursive: true })
       const path = join(target.dir, `${NATIVE_HOST}.json`)
+      // A link is the manifest of whatever made it: home-manager's, into the read-only Nix store,
+      // or a dotfiles manager's. Writing through it would fail, or change that file: leave it.
+      const link = await lstat(path).then(
+        (stats) => (stats.isSymbolicLink() ? readlink(path) : undefined),
+        () => undefined
+      )
+      if (link !== undefined) {
+        done.push(`${target.label}: ${path}, a link to ${link}, left as it is`)
+        continue
+      }
       await writeFile(path, manifest)
       done.push(`${target.label}: ${path}`)
     } else if (target.key) {

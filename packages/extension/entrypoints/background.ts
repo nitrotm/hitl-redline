@@ -1,7 +1,7 @@
 import { type Bridge, type Rendered, bridgeForSession } from '@redline/shared'
 
 import { BridgeError, bridgeForTab, findBridges, heldChannels, postRound } from '@/src/bridge-client.ts'
-import { composite, crop } from '@/src/capture/composite.ts'
+import { composite, crop, fromScreen } from '@/src/capture/composite.ts'
 import { inspectPage } from '@/src/frameworks.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Request, Responses, Result } from '@/src/messages.ts'
 import { setToken } from '@/src/pairing.ts'
@@ -54,12 +54,21 @@ export default defineBackground(() => {
     if (tab.id !== undefined) void start(tab.id)
   })
 
+  // The browser's shortcuts, wherever the focus is in its window: the address bar, the sidebar, the
+  // page's open dropdown, where the page's own keys (Ctrl+S, Ctrl+D) never come.
   browser.commands.onCommand.addListener(async (command, tab) => {
-    if (command !== 'toggle-redline') return
     const tabId = tab?.id ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.id
     if (tabId === undefined) return
-    if ((await getSession(tabId))?.active) await stop(tabId)
-    else await start(tabId)
+    const active = (await getSession(tabId))?.active
+    if (command === 'toggle-redline') {
+      if (active) await stop(tabId)
+      else await start(tabId)
+    } else if (command === 'screenshot' || command === 'send') {
+      // the overlay, which finishes the mark or the comment at hand first; without one, a
+      // screenshot starts Redline, as the sidebar's button does
+      if (active) await tell(tabId, { type: 'shortcut', action: command }).catch(() => undefined)
+      else if (command === 'screenshot') await handle({ type: 'snapshot/capture' }, tabId).catch((error: unknown) => console.warn('Redline:', error))
+    }
   })
 
   // A reload or a navigation loses the overlay (the agent reloads the page after each round). A page
@@ -136,7 +145,7 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
         )
       if (!session?.active) await start(tabId, bridge)
       else if (!session.channel) await change(tabId, (s) => bindChannel(s, bridge.status.channel, bridge.status.agent))
-      return capture(tabId)
+      return capture(tabId, request.screen)
     }
     case 'snapshot/open':
       return change(tabId, (s) => openSnapshot(s, request.snapshotId))
@@ -226,8 +235,9 @@ function tell<T>(tabId: number, request: ContentRequest): Promise<T> {
 }
 
 // The overlay hides while the tab is captured, a screenshot it may be showing too: the live page
-// is what is captured. The new snapshot is the one to annotate.
-async function capture(tabId: number): Promise<CaptureResult> {
+// is what is captured. The new snapshot is the one to annotate. With SCREEN (a frame of the window
+// or the screen shared), the page is taken out of it, where the tab's capture is in it.
+async function capture(tabId: number, screen?: string): Promise<CaptureResult> {
   const tab = await browser.tabs.get(tabId)
   const captureTab = firefoxCaptureTab()
   if (!captureTab && !tab.active) throw new Error('the tab must be the active one of its window to be captured')
@@ -241,6 +251,7 @@ async function capture(tabId: number): Promise<CaptureResult> {
     } finally {
       await tell(tabId, { type: 'capture/restore' })
     }
+    if (screen) clean = await fromScreen(screen, clean)
 
     // shown as a device: its frame, out of the window's screenshot
     const { device, ...capture } = prepared

@@ -1,6 +1,7 @@
 import type { Annotation, Point, Rendered, Snapshot, Target } from '@redline/shared'
 
 import { type Busy, busyness, placeBadge } from '../badge-place.ts'
+import { grabScreen } from '../capture/screen.ts'
 import { deviceOf } from '../devices.ts'
 import { TARGET_ATTRIBUTE } from '../frameworks.ts'
 import { COLORS, COLOR_KEYS, aim, arrowPath, badgeFor, boundingBox, fillPath, rectFromCorners, strokesPath, translate } from '../geometry.ts'
@@ -12,7 +13,7 @@ import { OVERLAY_CSS } from './style.ts'
 
 // The overlay, in a shadow root that the page's styles cannot reach. On the live page, it shows
 // nothing (the sidebar has the device and the screenshot), but the page as a device, and listens
-// for Ctrl+S, a screenshot. Once taken, the screenshot covers the page,
+// for Ctrl+S, a screenshot (Ctrl+Shift+S: of a shared window, for a dropdown). Once taken, the screenshot covers the page,
 // frozen, and the marks go on it: an SVG whose coordinates are the screenshot's, moved by its
 // scroll, so a mark is stored in page coordinates. What is drawn goes to the background, and
 // comes back through storage.
@@ -547,17 +548,46 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     )
   }
 
+  // Of the live page only: on a screenshot, it goes back to the live page, for the next one.
+  function screenshot() {
+    if (!snapshot) return capture()
+    if (editing !== null) closePopover(true)
+    act('close')
+  }
+
+  // A screenshot of the window or the screen the user shares, for an open dropdown, which the tab's
+  // own capture leaves out: the user opens it during the countdown. Off a screenshot first, for the
+  // dropdown to be there to open.
+  function screenCapture() {
+    finishStrokes()
+    if (editing !== null) closePopover(true)
+    if (snapshot) act('close')
+    void grabScreen(
+      win,
+      (left) => notify(`Open the dropdown: ${left}…`),
+      () => (toast.hidden = true)
+    )
+      .then((screen) => send({ type: 'snapshot/capture', screen }))
+      .then(
+        (r) => notify(`${r.snapshotId}: draw on the screenshot, then comment each mark; back to the page (✕) for another`),
+        (error: unknown) => report(error instanceof DOMException && error.name === 'NotAllowedError' ? 'Nothing shared: no screenshot' : error)
+      )
+  }
+
   function onKey(e: KeyboardEvent) {
     if (!e.isTrusted || e.altKey || e.metaKey) return
-    // a new screenshot, from wherever the focus is: Ctrl+S, the browser's Save Page otherwise, which
-    // yields to the page that takes it (S by its letter: a screenshot, on any layout). Of the live
-    // page only: on a screenshot, it goes back to the live page, for the next one.
+    // Ctrl+Shift+S, the browser's Take Screenshot otherwise, which yields to the page as Save Page does
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault()
+      e.stopPropagation()
+      return screenCapture()
+    }
+    // a new screenshot, from wherever the focus is in the page: Ctrl+S, the browser's Save Page
+    // otherwise, which yields to the page that takes it (S by its letter: a screenshot, on any layout)
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 's') {
       e.preventDefault()
       e.stopPropagation()
-      if (!snapshot) return capture()
-      if (editing !== null) closePopover(true)
-      return act('close')
+      return screenshot()
     }
     // the round to the agent, from wherever the focus is: Ctrl+D, the browser's bookmark otherwise; Done
     // when there is nothing to send. The comment being typed, and the pen's strokes, go first.
@@ -644,6 +674,10 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
         case 'highlight':
           highlighted = request.id
           drawShapes()
+          return Promise.resolve(null)
+        case 'shortcut':
+          if (request.action === 'screenshot') screenshot()
+          else submit()
           return Promise.resolve(null)
         case 'ping':
           return Promise.resolve('pong')

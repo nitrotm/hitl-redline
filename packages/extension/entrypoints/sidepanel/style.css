@@ -436,6 +436,16 @@ footer {
   margin-right: 4px;
 }
 
+/* a combination with a modifier, on a line of its own: two of them side by side widen the column */
+.shortcuts .combo.chord {
+  display: flex;
+  width: fit-content;
+}
+
+.shortcuts .combo.chord + .combo.chord {
+  margin-top: 4px;
+}
+
 .shortcuts td:last-child {
   color: var(--fg);
 }

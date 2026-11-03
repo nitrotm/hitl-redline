@@ -1,6 +1,7 @@
 import type { Annotation, Viewport } from '@redline/shared'
 
 import { RECT_STROKE, badgeFor, fillPath } from '../geometry.ts'
+import { grayOf, locate } from './align.ts'
 
 // The annotated screenshot: the clean one, with the marks and their #id badges drawn on it as the
 // overlay draws them. Canvas without a document (OffscreenCanvas, createImageBitmap), so that it
@@ -67,6 +68,31 @@ export async function crop(png: string, rect: { x: number; y: number; width: num
   canvas.getContext('2d')!.drawImage(bitmap, x, y, width, height, 0, 0, width, height)
   bitmap.close()
   return pngDataUrl(await canvas.convertToBlob({ type: 'image/png' }))
+}
+
+// The page, out of a frame of the window or the screen the user shared (src/capture/screen.ts):
+// where the tab's own screenshot, REFERENCE, is in it, at that one's size.
+export async function fromScreen(framePng: string, referencePng: string): Promise<string> {
+  const frame = await createImageBitmap(await (await fetch(framePng)).blob())
+  const reference = await createImageBitmap(await (await fetch(referencePng)).blob())
+  try {
+    const at = locate(grayOfBitmap(frame), grayOfBitmap(reference))
+    if (!at) throw new Error("The page is not in what was shared: share the browser's window, or the screen it is on")
+    const { width, height } = reference
+    const canvas = new OffscreenCanvas(width, height)
+    canvas.getContext('2d')!.drawImage(frame, at.x, at.y, width * at.scale, height * at.scale, 0, 0, width, height)
+    return pngDataUrl(await canvas.convertToBlob({ type: 'image/png' }))
+  } finally {
+    frame.close()
+    reference.close()
+  }
+}
+
+function grayOfBitmap(bitmap: ImageBitmap) {
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(bitmap, 0, 0)
+  return grayOf(ctx.getImageData(0, 0, bitmap.width, bitmap.height).data, bitmap.width, bitmap.height)
 }
 
 async function pngDataUrl(blob: Blob): Promise<string> {

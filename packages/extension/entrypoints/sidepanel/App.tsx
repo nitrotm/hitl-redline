@@ -142,10 +142,18 @@ function StatusBar({ tab, session, listening, ask }: { tab: ActiveTab | undefine
 
 // the keys, one per row: a key's names are joined by +, keys side by side are alternatives
 // the shortcuts that need the agent listening: a screenshot is for it, a round goes to it
-const FOR_CLAUDE = new Set(['Ctrl+S', 'Ctrl+D'])
+const FOR_CLAUDE = new Set(['Ctrl+S', 'Ctrl+Shift+S', 'Ctrl+D', 'Alt+Shift+S', 'Alt+Shift+D'])
 
 const SHORTCUTS: [string[][], string][] = [
   [[['Ctrl', 'S']], 'Take a screenshot of the live page, to draw on; on a screenshot, back to the live page'],
+  [[['Ctrl', 'Shift', 'S']], 'A screenshot with an open dropdown: share the browser’s window, then open it during the countdown'],
+  [
+    [
+      ['Alt', 'Shift', 'S'],
+      ['Alt', 'Shift', 'D'],
+    ],
+    'Ctrl+S and Ctrl+D, with the focus anywhere in the browser',
+  ],
   [[['1']], 'Select and move a mark'],
   [[['2']], 'Rectangle'],
   [[['3']], 'Arrow, from its start to what it points at'],
@@ -170,7 +178,7 @@ function Help({ listening }: { listening: boolean }) {
             <tr key={what}>
               <td>
                 {keys.map((combo, i) => (
-                  <span key={i} class="combo">
+                  <span key={i} class={combo.length > 1 ? 'combo chord' : 'combo'}>
                     {combo.map((key, j) => (
                       <Fragment key={key}>
                         {j > 0 && '+'}
@@ -341,7 +349,15 @@ function SessionView({ tab, session, ask, listening: found }: { tab: ActiveTab; 
 
       {session.snapshots.length === 0 && !session.reply && <Help listening={listening} />}
       {session.snapshots.map((snapshot) => (
-        <SnapshotView key={snapshot.id} tabId={tabId} session={session} snapshot={snapshot} ask={ask} disabled={locked} />
+        <SnapshotView
+          key={snapshot.id}
+          tabId={tabId}
+          session={session}
+          snapshot={snapshot}
+          ask={ask}
+          disabled={locked}
+          newest={snapshot.id === session.snapshots.at(-1)?.id}
+        />
       ))}
 
       <footer>
@@ -446,13 +462,33 @@ function Outbox({ session, agent, ask }: { session: Session; agent: string; ask:
   return null
 }
 
-function SnapshotView({ tabId, session, snapshot, ask, disabled }: { tabId: number; session: Session; snapshot: Snapshot; ask: Ask; disabled: boolean }) {
+function SnapshotView({
+  tabId,
+  session,
+  snapshot,
+  ask,
+  disabled,
+  newest,
+}: {
+  tabId: number
+  session: Session
+  snapshot: Snapshot
+  ask: Ask
+  disabled: boolean
+  newest: boolean
+}) {
   const current = session.current === snapshot.id
   const time = new Date(snapshot.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   // the newest mark, scrolled to as it is drawn
   const last = snapshot.annotations.at(-1)?.id
+  const section = useRef<HTMLElement>(null)
+  // the newest screenshot comes into view as it is taken, and as the sidebar opens, with what is
+  // under it as far as it fits: the button that sends the round
+  useEffect(() => {
+    if (newest) section.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [newest])
   return (
-    <section class={current ? 'current' : ''}>
+    <section ref={section} class={current ? 'current' : ''}>
       <div class="section-head">
         <h2>
           {snapshot.id} <span class="meta">{[snapshot.device, time].filter(Boolean).join(' · ')}</span>
@@ -549,9 +585,11 @@ function Mark({
   selected: boolean
 }) {
   const item = useRef<HTMLLIElement>(null)
-  // the newest mark as it is drawn, and the one selected on the page, come into view
+  // The newest mark as it is drawn comes into view with what is under it, as far as it fits: the
+  // button that sends the round. The one selected on the page, just into view.
   useEffect(() => {
-    if ((newest && current) || selected) item.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (newest && current) item.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    else if (selected) item.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [newest, current, selected])
   // the marks of the screenshot on the page, to show it where the pointer is
   const highlight = (id: number | null) => {

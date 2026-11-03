@@ -18,6 +18,15 @@ export default defineConfig({
         suggested_key: { default: 'Alt+Shift+R' },
         description: 'Turn Redline on or off on this tab',
       },
+      // Ctrl+S and Ctrl+D, wherever the focus is in the browser's window, not only in the page
+      screenshot: {
+        suggested_key: { default: 'Alt+Shift+S' },
+        description: 'Take a screenshot of the page; on a screenshot, back to the live page',
+      },
+      send: {
+        suggested_key: { default: 'Alt+Shift+D' },
+        description: 'Send the round to your agent; Done when there is nothing to send',
+      },
     },
     ...(browser === 'chrome' && { key: CHROME_KEY }),
     ...(browser === 'firefox' && {

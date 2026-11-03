@@ -152,6 +152,7 @@ saves. Double-click a mark or its number, whatever the tool, to edit its comment
 | Key                                                 | Tool                                                                       |
 | --------------------------------------------------- | -------------------------------------------------------------------------- |
 | <kbd>Ctrl</kbd>+<kbd>S</kbd>                        | Take a screenshot of the live page; on a screenshot, back to the live page |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>       | A screenshot of a shared window, with an open dropdown (below)             |
 | <kbd>1</kbd>                                        | Select: move a mark, or select it                                          |
 | <kbd>2</kbd>                                        | Rectangle                                                                  |
 | <kbd>3</kbd>                                        | Arrow: press where it starts, release where it points                      |
@@ -160,11 +161,24 @@ saves. Double-click a mark or its number, whatever the tool, to edit its comment
 | <kbd>Del</kbd>                                      | Delete the selected mark                                                   |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                                         |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd>                        | Send to your agent; Done when there is nothing to send                     |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>        | <kbd>Ctrl</kbd>+<kbd>S</kbd>, wherever the focus is in the browser         |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd>        | <kbd>Ctrl</kbd>+<kbd>D</kbd>, wherever the focus is in the browser         |
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                                          |
 
 The tools and colors go by their places on the keyboard, not their letters: the colors are the
 row under the digits whatever the layout (A Z E R on AZERTY). While Redline is on,
 <kbd>Ctrl</kbd>+<kbd>S</kbd> is its screenshot, not the browser's Save Page.
+
+<kbd>Ctrl</kbd>+<kbd>S</kbd> and <kbd>Ctrl</kbd>+<kbd>D</kbd> work only while the focus is in the page.
+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> and <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> do the same
+from anywhere in the browser's window, such as the address bar or the sidebar. They are the browser's shortcuts, which you can change:
+`about:addons` → ⚙ → Manage Extension Shortcuts in Firefox, `chrome://extensions/shortcuts` in Chrome.
+
+An open dropdown (a `<select>`'s list) is the browser's, not the page's: a screenshot leaves it
+out. For one with it, press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> on the page, and share
+the browser's window, or the screen it is on, when the browser asks. During the countdown, open
+the dropdown. Redline takes one frame, stops sharing, finds the page in the frame and keeps only
+the page: the part of the list that hangs out of it is cut off. The browser asks each time.
 
 While a screenshot is shown, a toolbar on it has the tools, the colors, undo and delete. Its ✕
 leaves the screenshot, back to the live page, where the next one is taken; its grip moves it out

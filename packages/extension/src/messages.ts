@@ -23,8 +23,10 @@ export type Request =
   // on the page or in the sidebar: both show it; the sidebar's opens its snapshot
   | { type: 'annotation/select'; tabId?: number; id: number | null }
   | { type: 'annotation/undo'; tabId?: number }
-  // a screenshot of the page, a new snapshot to annotate; it starts the session if need be
-  | { type: 'snapshot/capture'; tabId?: number }
+  // a screenshot of the page, a new snapshot to annotate; it starts the session if need be. With
+  // SCREEN, a frame of the window or the screen the user shared (src/capture/screen.ts), the page
+  // is taken out of it: the browser's popups with it.
+  | { type: 'snapshot/capture'; tabId?: number; screen?: string }
   | { type: 'snapshot/open'; tabId?: number; snapshotId: string }
   | { type: 'snapshot/close'; tabId?: number }
   | { type: 'snapshot/delete'; tabId?: number; snapshotId: string }
@@ -73,8 +75,14 @@ export interface CaptureResult {
   snapshotId: string
 }
 
-// What the background asks the overlay of a tab.
-export type ContentRequest = { type: 'capture/prepare' } | { type: 'capture/restore' } | { type: 'highlight'; id: number | null } | { type: 'ping' }
+// What the background asks the overlay of a tab. A shortcut is the browser's command (wxt.config.ts),
+// which the page's keys never see: the same as Ctrl+S or Ctrl+D on it.
+export type ContentRequest =
+  | { type: 'capture/prepare' }
+  | { type: 'capture/restore' }
+  | { type: 'highlight'; id: number | null }
+  | { type: 'shortcut'; action: 'screenshot' | 'send' }
+  | { type: 'ping' }
 
 export interface PreparedCapture {
   viewport: Viewport

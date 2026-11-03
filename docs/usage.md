@@ -103,7 +103,8 @@ with its browser:
 - **Firefox's window title**, `[sleepy-gecko] …`: the channel of the window's tab on screen, else
   the one its tabs are all bound to. Chrome has no such title.
 - **[Herdr](https://herdr.dev)**: a wait run in one of its panes names the agent there after its
-  channel, unless you named it yourself. Herdr forgets the name when the agent exits.
+  kind and its channel, `claude-sleepy-gecko`, unless you named it yourself. Herdr forgets the
+  name when the agent exits.
 
 - A tab is bound to the channel of the agent that opened it (the one whose `redline wait` names
   the page's app, and that no other tab has yet). Its rounds go to that agent alone: while it is

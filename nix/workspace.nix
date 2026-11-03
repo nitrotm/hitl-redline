@@ -1,6 +1,3 @@
-# The yarn workspaces (packages/*), from yarn.lock: checked (tsc, vitest) and built
-# into the extension, for Firefox and Chrome ($out/firefox, $out/chrome, $out/redline.xpi),
-# and the bridge, one file bundled by esbuild ($out/bridge/redline.mjs).
 { pkgs }:
 let
   inherit (pkgs) lib;
@@ -44,6 +41,7 @@ pkgs.stdenv.mkDerivation (finalAttrs: {
   missingHashes = ./missing-hashes.json;
   offlineCache = yarn.fetchYarnBerryDeps {
     inherit (finalAttrs) src missingHashes;
+
     # after a change of yarn.lock: the hash nix says it got
     hash = "sha256-9uj7/pd2kpIVXainMyvrJ+qTObQxwq9Ij0APmh+sXCU=";
   };

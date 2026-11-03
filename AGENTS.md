@@ -19,7 +19,7 @@ result to Claude Code, and a `redline` skill (`/redline`) that runs the review l
 | `packages/extension/src/capture` | The annotated screenshot (OffscreenCanvas)                                                                                                                                                            |
 | `claude/`                        | The Claude Code plugin: `skills/redline/SKILL.md` is the review loop, and `/redline`. No command of the same name: in a plugin, both would be `redline:redline`, and the command would hide the skill |
 | `e2e-fixtures/`                  | A test page and its server                                                                                                                                                                            |
-| `nix/`                           | `workspace.nix` (yarn build + checks), `bridge.nix` (the `redline` wrapper)                                                                                                                           |
+| `nix/`                           | `workspace.nix` (yarn build + checks), `bridge.nix` (the `redline` wrapper), `shell.nix` (the dev shell)                                                                                              |
 
 ## Commands
 

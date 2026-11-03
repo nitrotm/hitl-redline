@@ -24,6 +24,8 @@ runs the review loop. See [README.md](README.md) for what it does, and
 | `docs/agents.md`                 | The agent contract: the commands, their exit codes, the files, the reply, the ways to wait and to show pages                                                                                                                            |
 | `docs/`                          | The user's documentation (`install.md`, `usage.md`, `security.md`), and the README's pictures (`images/`, made by `yarn shots`: `packages/extension/tests/readme`)                                                                      |
 | `e2e-fixtures/`                  | A test page and its server                                                                                                                                                                                                              |
+| `scripts/version.mjs`            | The release's version, the same in every package and the plugin: `yarn bump X.Y.Z`                                                                                                                                                      |
+| `.github/workflows/ci.yml`       | CI: the flake's checks, lint, the end-to-end tests in both browsers; on main, the release                                                                                                                                               |
 | `nix/`                           | `workspace.nix` (yarn build + checks), `bridge.nix` (the `redline` wrapper, the native host and its manifest), `shell.nix` (the dev shell)                                                                                              |
 
 ## Commands
@@ -40,6 +42,7 @@ yarn test:e2e:chrome    # Playwright + the dev shell's Chromium
 yarn test:e2e:firefox   # Selenium + geckodriver
 yarn lint               # prettier --check; `yarn format` writes
 nix flake check         # builds the workspace: typecheck and tests included
+yarn bump 1.2.0         # the version, in every file that has one (no argument: check they agree)
 ```
 
 ## How it fits together
@@ -134,6 +137,16 @@ nix flake check         # builds the workspace: typecheck and tests included
    `packages/extension/.output/firefox-mv2` (`type: "path"`), then open the page: Redline starts
    on it by itself (`<redline-overlay>` in the page; nothing shows until a screenshot). `redline status` prints the sidebar's URL. Add
    `?url=http://127.0.0.1:47380/` to it to open it in a tab, following that page.
+
+## Releasing
+
+A release is a pull request that bumps the version (`yarn bump X.Y.Z`, X.Y.Z only: browsers'
+manifests take numbers). When it is merged and main's checks pass, CI tags that commit `vX.Y.Z` and
+publishes a GitHub Release of the build it tested: `hitl-redline-X.Y.Z.tar.gz` (the bridge, both
+extensions and the skill, laid out as a checkout's build), `redline-X.Y.Z.xpi`,
+`redline-chrome-X.Y.Z.zip` and their `SHA256SUMS`. A push to main whose version is released
+already releases nothing. Releases are immutable (the repository's setting): a version is never
+released twice, so a mistake is fixed by the next one.
 
 ## Gotchas
 

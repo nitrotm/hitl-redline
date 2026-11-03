@@ -65,7 +65,8 @@ describe('the pi extension', () => {
 
     expect(await post(port)).toBe(200)
     await expect.poll(() => pi.messages.length).toBe(1)
-    const feedback = join(cwd, '.redline', 'rounds', '001', 'feedback.md')
+    const channel = /([a-z]+-[a-z]+) waiting/.exec(text)![1]!
+    const feedback = join(cwd, '.redline', channel, '001', 'feedback.md')
     expect(pi.messages[0]).toContain(`Read ${feedback}`)
     expect(await readFile(feedback, 'utf8')).toContain('**#1**')
   })

@@ -106,5 +106,5 @@ test('install over CDP as the Chrome DevTools MCP does, pair from the profile, a
   )
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)
-  expect(await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')).toContain('> Through the MCP way')
+  expect(await readFile(join(bridge.dir, bridge.channel, '001', 'feedback.md'), 'utf8')).toContain('> Through the MCP way')
 })

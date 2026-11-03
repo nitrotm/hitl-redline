@@ -13,10 +13,11 @@ import {
   pathText,
 } from '@redline/shared'
 
-// A round on disk, in .redline/rounds/NNN/: feedback.md for the agent (and a human) to read first,
-// feedback.json with all of it, and the screenshots of each snapshot, S1.annotated.png and
-// S1.clean.png. NNN counts the rounds of the project, whatever their session. They show what the
-// page showed, so they are the user's only: 0700 and 0600 (Windows ignores the modes).
+// A round on disk, in .redline/<channel>/NNN/: feedback.md for the agent (and a human) to read
+// first, feedback.json with all of it, and the screenshots of each snapshot, S1.annotated.png and
+// S1.clean.png. Each channel has a directory of its own, so that the agent sessions that review the
+// same project never see each other's rounds, and NNN counts the rounds of the channel. They show
+// what the page showed, so they are the user's only: 0700 and 0600 (Windows ignores the modes).
 
 export interface WrittenRound {
   directory: string
@@ -26,10 +27,15 @@ export interface WrittenRound {
 
 const PRIVATE = { mode: 0o600 }
 
-// PROJECT: the directory the sources are in, which their paths are written from; CHANNEL: the
-// the agent session's (src/channels.ts)
-export async function writeRound(root: string, round: FeedbackRound, project?: string, channel?: string): Promise<WrittenRound> {
-  const rounds = join(root, 'rounds')
+// the directory of a channel's rounds, and of the agent's reply to them
+export function channelDirectory(root: string, channel: string): string {
+  return join(root, channel)
+}
+
+// CHANNEL: the agent session's (src/channels.ts); PROJECT: the directory the sources are in, which
+// their paths are written from
+export async function writeRound(root: string, channel: string, round: FeedbackRound, project?: string): Promise<WrittenRound> {
+  const rounds = channelDirectory(root, channel)
   await mkdir(rounds, { recursive: true, mode: 0o700 })
   const directory = await nextRoundDirectory(rounds)
 

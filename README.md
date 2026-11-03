@@ -39,7 +39,7 @@ the element under it, changes the code, replies, and waits for the next round.
    … as many screenshots as you need
                 │  Send
                 ▼
-   the agent reads .redline/rounds/NNN/, changes the code, reloads the page, and waits again
+   the agent reads .redline/<channel>/NNN/, changes the code, reloads the page, and waits again
                 │
                 └──▶ … until you click Done
 ```
@@ -49,7 +49,7 @@ the element under it, changes the code, replies, and waits for the next round.
 What your agent gets, in the project:
 
 ```
-.redline/rounds/001/
+.redline/sleepy-gecko/001/
 ├─ feedback.md          what the agent reads first: every mark by #id, its comment, its element
 ├─ feedback.json        all of it, with coordinates
 ├─ S1.annotated.png     the screenshot with the marks and their #id
@@ -73,7 +73,7 @@ It has three parts:
 - **The extension** (`packages/extension`), for Firefox and Chrome. It draws on the page, lists
   the marks in the sidebar, captures the screenshots, and sends each round.
 - **The bridge** (`packages/bridge`), `redline`: `redline wait` listens on the loopback for one
-  round, writes it to `.redline/rounds/NNN/`, prints the path of its `feedback.md`, and exits: that
+  round, writes it to `.redline/<channel>/NNN/`, prints the path of its `feedback.md`, and exits: that
   exit is what tells the agent a round came.
 - **The `redline` skill** (`claude/skills/redline`), an [Agent Skill](https://agentskills.io) that
   runs the loop. It comes as a Claude Code plugin, as a skill for Codex, and in a pi package

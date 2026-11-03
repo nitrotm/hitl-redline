@@ -107,6 +107,17 @@ export function bindChannel(session: Session, channel: string, agent?: string): 
   return { ...rest, channel, ...((agent ?? (session.channel === channel ? session.agent : undefined)) && { agent: agent ?? session.agent }) }
 }
 
+// The channel a window is named by (Firefox's title preface): its active tab's, else the one its
+// other tabs are all bound to, so that a window an agent opens keeps its name on a tab of another
+// site. A tab whose review ended (Done, nothing more to send) is for no agent anymore.
+export function windowChannel(active: Session | undefined, tabs: Session[]): string | undefined {
+  const live = (s: Session | undefined) => (s && (s.lastSent?.status !== 'done' || s.pending) ? s.channel : undefined)
+  const own = live(active)
+  if (own) return own
+  const channels = new Set(tabs.map(live).filter((c) => c !== undefined))
+  return channels.size === 1 ? [...channels][0] : undefined
+}
+
 // Whether the channel's wait of this run (NONCE) asks for the tab to be reloaded, and it was not yet.
 export function needsReload(session: Session, nonce: string, reload: boolean | undefined): boolean {
   return Boolean(reload) && session.lastSent?.status !== 'done' && session.reloadedFor !== nonce

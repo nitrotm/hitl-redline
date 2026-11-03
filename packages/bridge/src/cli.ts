@@ -9,16 +9,18 @@ import { parseArgs } from 'node:util'
 import { type Key, PORTS, PORT_ENV, Reply, askBridge, askBridges, importToken } from '@redline/shared'
 
 import { sessionKey } from './agent.ts'
-import { type Channel, claimChannel, clearWait, isAlive, recordWait } from './channels.ts'
+import { type Channel, claimChannel, clearWait, isAlive, listChannels, recordWait } from './channels.ts'
+import { nameHerdrAgent } from './herdr.ts'
 import { readOrCreateToken, tokenPath } from './home.ts'
 import { install, runNativeHost } from './native.ts'
 import { waitForRound } from './server.ts'
+import { channelDirectory } from './writer.ts'
 
 const USAGE = `usage: redline <command> [options]
 
 commands:
   wait            wait for one round of feedback from the extension, write it to
-                  <dir>/rounds/NNN/ and print the path of its feedback.md
+                  <dir>/<channel>/NNN/ and print the path of its feedback.md
   status          tell which \`redline wait\`s are listening, and for which channel
   open URL        open a page in the default browser, for an agent without a browser of its own
   reply-path      print where the reply to this session's rounds goes, which the next
@@ -53,7 +55,7 @@ options:
   --reload        wait: the agent changed the page: the browser reloads the channel's tabs
                   (for an agent that cannot; a dev server that hot-reloads needs none)
   --reply FILE    wait: the agent's reply to the last round, as JSON, shown in the sidebar
-                  (default: <dir>/replies/<channel>.json, if there):
+                  (default: <dir>/<channel>/reply.json, if there):
                   { "sessionId", "round", "summary"?, "marks"?: [{ "id", "text" }],
                     "questions"?: [{ "id": "Q1", "text", "mark"? }] }
 
@@ -187,9 +189,9 @@ function openInBrowser(url: string): Promise<void> {
   })
 }
 
-// where the agent writes its reply to the channel's rounds, which its next wait serves
+// where the agent writes its reply to the channel's rounds, which its next wait serves: beside them
 function replyPath(root: string, channel: string): string {
-  return join(root, 'replies', `${channel}.json`)
+  return join(channelDirectory(root, channel), 'reply.json')
 }
 
 // The skill, for the agents that read ~/.agents/skills (Codex, pi): a link to this build's, so that
@@ -230,6 +232,9 @@ async function wait(options: Wait): Promise<number> {
   const key = await importToken(await readOrCreateToken())
   let channel = await claimChannel({ session: options.session ?? (await sessionKey(project)), project, name: options.channel })
   await stopLastWait(channel, key)
+  // the agent's pane, in Herdr, named after the channel, while the wait starts
+  const channels = new Set((await listChannels()).map((c) => c.name))
+  void nameHerdrAgent(channel.name, (name) => channels.has(name))
   // the reply the agent wrote for its channel, unless it named one
   const reply = options.reply ?? (existsSync(replyPath(options.root, channel.name)) ? await readReply(replyPath(options.root, channel.name)) : undefined)
   // the channel's port, if free: the sidebar finds it where it was

@@ -179,7 +179,7 @@ test('a review round, for the README', async () => {
   await frame(1400)
 
   // the round the agent got
-  const round = join(project, 'rounds', '001')
+  const round = join(project, bridge.channel, '001')
   await rm(join(IMAGES, 'round'), { recursive: true, force: true })
   await mkdir(join(IMAGES, 'round'), { recursive: true })
   for (const file of ['feedback.md', 'S1.annotated.png']) await writeFile(join(IMAGES, 'round', file), await readFile(join(round, file)))
@@ -187,7 +187,7 @@ test('a review round, for the README', async () => {
   // the agent fixes the page, replies, and has it reloaded
   html = await readFile(join(import.meta.dirname, 'demo-after.html'), 'utf8')
   const { sessionId } = JSON.parse(await readFile(join(round, 'feedback.json'), 'utf8'))
-  const replyFile = join(project, 'reply.json')
+  const replyFile = join(project, bridge.channel, 'reply.json')
   await writeFile(
     replyFile,
     JSON.stringify({

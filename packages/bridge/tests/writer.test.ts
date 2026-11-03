@@ -36,13 +36,15 @@ describe('renderFeedback', () => {
 })
 
 describe('writeRound', () => {
-  it('writes each round in a directory of its own', async () => {
+  it('writes each round in a directory of its own, numbered in its channel', async () => {
     const root = await mkdtemp(join(tmpdir(), 'redline-'))
-    const first = await writeRound(root, makeRound())
-    const second = await writeRound(root, makeRound({ round: 2 }))
+    const first = await writeRound(root, 'brave-cat', makeRound())
+    const other = await writeRound(root, 'calm-dog', makeRound())
+    const second = await writeRound(root, 'brave-cat', makeRound({ round: 2 }))
 
-    expect(first.directory).toBe(join(root, 'rounds', '001'))
-    expect(second.directory).toBe(join(root, 'rounds', '002'))
+    expect(first.directory).toBe(join(root, 'brave-cat', '001'))
+    expect(other.directory).toBe(join(root, 'calm-dog', '001'))
+    expect(second.directory).toBe(join(root, 'brave-cat', '002'))
     expect(first.annotations).toBe(2)
     expect((await readdir(first.directory)).sort()).toEqual(['S1.annotated.png', 'S1.clean.png', 'feedback.json', 'feedback.md'])
 

@@ -72,12 +72,15 @@ whether it does, and which agent: its name, its channel's, and its project.
 Each round lands in the project:
 
 ```
-.redline/rounds/003/
+.redline/sleepy-gecko/003/
 ├─ feedback.md          what the agent reads first: every mark by #id, its comment, its element
 ├─ feedback.json        all of it, with coordinates
 ├─ S1.annotated.png     the screenshot with the marks and their #id
 └─ S1.clean.png         the same, without
 ```
+
+`sleepy-gecko` is the agent's channel: each agent session has a directory of its own, its rounds
+numbered from 001, so two agents reviewing the same project never mix theirs.
 
 Add `.redline/` to the project's `.gitignore` (`/redline` does).
 
@@ -94,7 +97,13 @@ Mark ids are never reused in a session: `#7` is the same mark in every snapshot 
 
 Each agent session, of whichever agent, reviews with you on a channel of its own, named like `sleepy-gecko`: in
 different projects, in worktrees of one, or even in the same directory on the same dev server.
-`redline wait` prints its channel's name, and the sidebar's bar shows it.
+`redline wait` prints its channel's name, and the sidebar's bar shows it. So do, to match an agent
+with its browser:
+
+- **Firefox's window title**, `[sleepy-gecko] …`: the channel of the window's tab on screen, else
+  the one its tabs are all bound to. Chrome has no such title.
+- **[Herdr](https://herdr.dev)**: a wait run in one of its panes names the agent there after its
+  channel, unless you named it yourself. Herdr forgets the name when the agent exits.
 
 - A tab is bound to the channel of the agent that opened it (the one whose `redline wait` names
   the page's app, and that no other tab has yet). Its rounds go to that agent alone: while it is

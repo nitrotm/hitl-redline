@@ -21,7 +21,7 @@ import { type WrittenRound, writeRound } from './writer.ts'
 export interface WaitOptions {
   // the first of them that is free (0: any)
   ports: number[]
-  // where the rounds go: <root>/rounds/NNN
+  // where the rounds go: <root>/<channel>/NNN
   root: string
   // the project the round is for, shown in the sidebar
   project: string
@@ -119,7 +119,7 @@ export function waitForRound(options: WaitOptions): Promise<ReceivedRound> {
 
       let written: WrittenRound
       try {
-        written = await writeRound(options.root, parsed.data, options.project, options.channel)
+        written = await writeRound(options.root, options.channel, parsed.data, options.project)
       } catch (error) {
         // the round stays in the browser; this wait ends, with the reason
         send(res, 500, { error: `the round could not be written: ${String(error)}` }, {}, () => {

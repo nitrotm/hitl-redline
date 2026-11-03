@@ -20,6 +20,7 @@ pkgs.mkShell {
     geckodriver
     web-ext
     ungoogled-chromium
+    gifski # the README's GIF (yarn shots)
   ];
   env = {
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"; # Playwright drives the Chromium above, and never downloads its own

@@ -102,12 +102,12 @@ so ("Send to Codex").
   side panel: tell the user to pin it from the puzzle menu once; `trigger_extension_action`, with
   Redline's id from `list_extensions`, presses it for them. If `install_extension` is not there,
   or answers that access is denied, the MCP needs `--categoryExtensions` and a
-  `--filesystemRoot` that holds the extension: ask the user to set them (the README tells how).
+  `--filesystemRoot` that holds the extension: ask the user to set them (https://github.com/nitrotm/hitl-redline/blob/main/docs/install.md#the-browser tells how).
   Chrome captures only the tab on screen: the user takes a screenshot of the page they look at.
 - **With an MCP that drives the user's own browser** (Claude in Chrome, Playwright MCP's
   extension): the extension is the one the user installed. Open and reload pages with that MCP's
   tools.
-- **Without one**: the user installed the extension in their own browser (the README tells how;
+- **Without one**: the user installed the extension in their own browser (https://github.com/nitrotm/hitl-redline/blob/main/docs/install.md#the-browser tells how;
   if the sidebar is not there, ask them to). Open the page with `redline open <URL>`. To reload it
   after your changes, start the next wait with `--reload`: the browser reloads the tabs bound to
   your channel. A dev server that hot reloads needs none of it.

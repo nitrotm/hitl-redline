@@ -1,8 +1,11 @@
 {
   "name": "redline",
   "version": "1.0.0",
-  "description": "/redline: open the preview in Firefox, wait for screenshots annotated with the Redline extension, apply the feedback, and wait again.",
+  "description": "/redline: open the preview in the browser, wait for screenshots annotated with the Redline extension, apply the feedback, and wait again.",
   "author": {
     "name": "Antony Ducommun"
-  }
+  },
+  "homepage": "https://github.com/nitrotm/hitl-redline",
+  "repository": "https://github.com/nitrotm/hitl-redline",
+  "license": "MIT"
 }

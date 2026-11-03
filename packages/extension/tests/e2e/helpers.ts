@@ -54,12 +54,13 @@ export interface Bridge {
   process: ChildProcess
 }
 
-// `redline wait`, from the sources, on the extension's port
-export async function startBridge(previewUrl: string, extra: string[] = []): Promise<Bridge> {
+// `redline wait`, from the sources, on the extension's port; its project is the directory it runs in
+export async function startBridge(previewUrl: string, extra: string[] = [], cwd?: string): Promise<Bridge> {
   const dir = await mkdtemp(join(tmpdir(), 'redline-e2e-'))
   // named as the sidebar shows it, which the tests look for
   const child = spawn(process.execPath, [CLI, 'wait', '--agent', 'Claude', '--url', previewUrl, '--dir', dir, ...extra], {
     stdio: ['ignore', 'pipe', 'pipe'],
+    cwd,
   })
   let stdout = ''
   let stderr = ''

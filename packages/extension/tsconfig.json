@@ -13,5 +13,5 @@
     "verbatimModuleSyntax": true,
     "types": ["node"]
   },
-  "exclude": ["tests/e2e", ".output"]
+  "exclude": ["tests/e2e", "tests/readme", ".output"]
 }

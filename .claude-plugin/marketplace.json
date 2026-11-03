@@ -7,7 +7,7 @@
     {
       "name": "redline",
       "source": "./claude",
-      "description": "/redline: annotated screenshots from Firefox, as feedback for Claude Code."
+      "description": "/redline: draw on the page you are building, comment each mark, and Claude Code fixes it."
     }
   ]
 }

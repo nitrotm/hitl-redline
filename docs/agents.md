@@ -43,7 +43,7 @@ then the path of its `feedback.md`, last.
 | 130  | Interrupted.                                          | Nothing.                   |
 
 A wait listens on 127.0.0.1 only, on the first free port of 47390-47399, and only answers who
-proves they know the user's token (the README's Security section). A sandboxed agent must let it
+proves they know the user's token ([Security](security.md)). A sandboxed agent must let it
 listen there: run it outside the sandbox, or allow it to bind the loopback.
 
 ## A round on disk
@@ -106,7 +106,7 @@ one. Ten waits at once at most: the ten ports.
 - **A browser MCP**: firefox-devtools (`redline extension-path`), or the Chrome DevTools MCP
   (`redline extension-path chrome`, with `--categoryExtensions`), gives the extension to install as
   a temporary add-on, and the MCP opens and reloads the pages.
-- **The user's own browser**, with the extension installed by hand (the README): `redline open URL`
+- **The user's own browser**, with the extension installed by hand ([Install](install.md#the-browser)): `redline open URL`
   opens the page, and `redline wait --reload` reloads it after the agent's changes. A dev server
   that hot reloads needs neither.
 

@@ -1,6 +1,6 @@
 {
   "name": "@redline/pi",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "hitl-redline for pi: the redline skill, and a redline_wait tool that starts a turn when the user sends a round",
   "type": "module",

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Builder, By, Key, type WebDriver, until } from 'selenium-webdriver'
 import firefox from 'selenium-webdriver/firefox.js'
@@ -9,7 +10,8 @@ import { type Bridge, EXTENSION, expectRound, serveFixtures, startBridge, token 
 
 // Firefox's build (.output/firefox-mv2), installed as a temporary add-on by geckodriver: Playwright's
 // Firefox cannot load extensions. Its moz-extension:// UUID is set, to open the sidebar in a tab.
-// No native host here: it pairs by the token pasted in the sidebar.
+// No native host here: it pairs by the token pasted in the sidebar. Firefox gets a HOME of its own,
+// where the user's (`redline install`, ~/.mozilla/native-messaging-hosts) is not.
 
 const UUID = '6c1d1f4e-0f3a-4b5e-9d2a-7e8f9a0b1c2d'
 
@@ -25,7 +27,9 @@ test.beforeAll(async () => {
     .setPreference('extensions.webextensions.uuids', JSON.stringify({ 'redline@tmsrv.org': UUID }))
   if (process.env.FIREFOX_PATH) options.setBinary(process.env.FIREFOX_PATH)
   const geckodriver = execFileSync('which', ['geckodriver'], { encoding: 'utf8' }).trim()
-  driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).setFirefoxService(new firefox.ServiceBuilder(geckodriver)).build()
+  const home = await mkdtemp(join(tmpdir(), 'redline-e2e-firefox-home-'))
+  const service = new firefox.ServiceBuilder(geckodriver).setEnvironment({ ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, '.config') })
+  driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).setFirefoxService(service).build()
 
   await (driver as firefox.Driver).installAddon(join(EXTENSION, 'firefox-mv2'), true)
 })

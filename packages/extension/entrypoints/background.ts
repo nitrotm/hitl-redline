@@ -1,18 +1,22 @@
-import { type Rendered, isUnder } from '@redline/shared'
+import { type Bridge, type Rendered, bridgeForSession } from '@redline/shared'
 
-import { BridgeError, bridgeFor, postRound } from '@/src/bridge-client.ts'
+import { BridgeError, bridgeForTab, findBridges, heldChannels, postRound } from '@/src/bridge-client.ts'
 import { composite, crop } from '@/src/capture/composite.ts'
 import { inspectPage } from '@/src/frameworks.ts'
 import type { CaptureResult, ContentRequest, PreparedCapture, Request, Responses, Result } from '@/src/messages.ts'
+import { setToken } from '@/src/pairing.ts'
 import { deleteImage, deleteSessionImages, getImage, putImage } from '@/src/state/images.ts'
 import {
   type Session,
   addAnnotation,
+  bindChannel,
   buildRound,
   closeSnapshot,
   createSession,
   deleteAnnotation,
   deleteSnapshot,
+  markReloaded,
+  needsReload,
   openSnapshot,
   queueRound,
   roundFailed,
@@ -58,17 +62,23 @@ export default defineBackground(() => {
     else await start(tabId)
   })
 
-  // A reload or a navigation loses the overlay (Claude reloads the page after each round). A page
-  // of the preview that `redline wait --url` names starts a session by itself, unless the tab has
-  // one already, even stopped; a finished one (Done) does not count.
+  // A reload or a navigation loses the overlay (the agent reloads the page after each round). A page
+  // of the app whose preview `redline wait --url` names starts a session by itself, bound to that
+  // the agent, unless the tab has one already, even stopped; a finished one (Done) does not count.
   browser.tabs.onUpdated.addListener(async (tabId, change, tab) => {
     if (change.status !== 'complete') return
     const session = await getSession(tabId)
     if (session?.active) await inject(tabId).catch(() => undefined)
     else if ((!session || (session.lastSent?.status === 'done' && !session.pending)) && tab.url && /^https?:/.test(tab.url)) {
-      // a bridge for that very page: not one waiting for any
-      const bridge = await bridgeFor(tab.url)
-      if (bridge?.status.url && isUnder(tab.url, bridge.status.url)) await start(tabId).catch(() => undefined)
+      // a bridge for that app: not one waiting for any page
+      const { bridges } = await findBridges()
+      const bridge = bridgeForSession(
+        bridges.filter((b) => b.status.url),
+        tab.url,
+        undefined,
+        await heldChannels(tabId)
+      )
+      if (bridge) await start(tabId, bridge).catch(() => undefined)
     }
   })
   browser.tabs.onRemoved.addListener((tabId) => void discard(tabId))
@@ -81,6 +91,10 @@ export default defineBackground(() => {
 
 async function handle(request: Request, tabId: number | undefined): Promise<Responses[Request['type']]> {
   if (request.type === 'outbox/flush') return flush()
+  if (request.type === 'pair/set') {
+    await setToken(request.token)
+    return flush()
+  }
   if (request.type === 'whoami') {
     if (tabId === undefined) throw new Error('whoami: not a tab')
     return tabId
@@ -90,6 +104,8 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
   switch (request.type) {
     case 'session/discard':
       return discard(tabId)
+    case 'session/bind':
+      return change(tabId, (s) => bindChannel(s, request.channel, request.agent))
     case 'page/inspect':
       return inspect(tabId, request.nonce)
     case 'ui/set':
@@ -107,10 +123,19 @@ async function handle(request: Request, tabId: number | undefined): Promise<Resp
     case 'annotation/undo':
       return change(tabId, undo)
     case 'snapshot/capture': {
-      // a screenshot is for Claude: none while it does not listen for the page
+      // a screenshot is for the agent: none while it does not listen for the page
       const tab = await browser.tabs.get(tabId)
-      if (!(await bridgeFor(tab.url, (await getSession(tabId))?.id))) throw new Error('Claude is not listening for this page: start /redline in Claude Code')
-      if (!(await getSession(tabId))?.active) await start(tabId)
+      const session = await getSession(tabId)
+      const live = session && session.lastSent?.status !== 'done' ? session : undefined
+      const bridge = await bridgeForTab(tab.url, live ?? { tabId })
+      if (!bridge)
+        throw new Error(
+          live?.channel
+            ? `${capitalized(live.agent ?? 'your agent')} (${live.channel}) is not listening: it is at work on the last round, or its review ended`
+            : 'No agent is listening for this page: ask yours to review it (/redline)'
+        )
+      if (!session?.active) await start(tabId, bridge)
+      else if (!session.channel) await change(tabId, (s) => bindChannel(s, bridge.status.channel, bridge.status.agent))
       return capture(tabId)
     }
     case 'snapshot/open':
@@ -150,9 +175,13 @@ async function change(tabId: number, next: (session: Session) => Session): Promi
   return update(tabId, (s) => [next(required(s)), null])
 }
 
-async function start(tabId: number): Promise<Session> {
+// CHANNEL: the agent that listens for the page, which the session is bound to if it is not yet
+async function start(tabId: number, bridge?: Bridge): Promise<Session> {
+  const channel = bridge?.status.channel
+  const agent = bridge?.status.agent
   const session = await update(tabId, (s) => {
-    const next = s && s.lastSent?.status !== 'done' ? { ...s, active: true } : createSession(tabId, crypto.randomUUID())
+    const kept = s && s.lastSent?.status !== 'done' ? { ...s, active: true } : undefined
+    const next = kept ? (channel && !kept.channel ? bindChannel(kept, channel, agent) : kept) : createSession(tabId, crypto.randomUUID(), channel, agent)
     return [next, next]
   })
   await inject(tabId)
@@ -230,12 +259,17 @@ function firefoxCaptureTab() {
 let flushing = false
 
 // Sends every submitted round to the bridge; a round no one took waits for the next try: the
-// alarm's, or the sidebar's once it sees a bridge listening.
+// alarm's, or the sidebar's once it sees a bridge listening. Reloads the tabs whose agent changed
+// their page and cannot reload it itself (`redline wait --reload`).
 async function flush(): Promise<null> {
   if (flushing) return null
   flushing = true
   try {
-    for (const session of Object.values(await getSessions())) {
+    const sessions = Object.values(await getSessions())
+    if (!sessions.some((s) => s.pending || s.channel)) return null
+    const found = await findBridges()
+    await reloadBound(sessions, found.bridges)
+    for (const session of sessions) {
       if (!session.pending) continue
       try {
         // the marks, drawn on the screenshots as the overlay draws them, with their #id
@@ -244,12 +278,14 @@ async function flush(): Promise<null> {
           const clean = await getImage(session.id, snapshot.id)
           if (clean) images.set(snapshot.id, { clean, annotated: await composite(clean, snapshot.annotations, snapshot.viewport) })
         }
-        // the bridge of the page the tab shows, if one listens
+        // the bridge of the session's channel, if it listens; for one not bound yet, that of the
+        // page its screenshots are of, not where the tab went since
         const tab = await browser.tabs.get(session.tabId).catch(() => undefined)
-        const bridge = await bridgeFor(tab?.url, session.id)
-        if (!bridge) throw new BridgeError('Claude is not listening', true)
-        const accepted = await postRound(buildRound(session, images), bridge.port)
-        await update(session.tabId, (s) => [s && roundSent(s, accepted.directory, new Date().toISOString()), null])
+        const bridge = await bridgeForTab(session.snapshots[0]?.url ?? tab?.url, session, found)
+        if (!bridge) throw new BridgeError('the agent is not listening', true)
+        const accepted = await postRound(buildRound(session, images), bridge)
+        const { channel, agent } = bridge.status
+        await update(session.tabId, (s) => [s && roundSent(bindChannel(s, channel, agent), accepted.directory, new Date().toISOString()), null])
         for (const snapshot of session.snapshots) await deleteImage(session.id, snapshot.id)
         if (session.pending.status === 'done') await deleteSessionImages(session.id)
       } catch (error) {
@@ -263,8 +299,23 @@ async function flush(): Promise<null> {
   return null
 }
 
+// once per run of the channel's wait, each tab bound to it that the wait asks to reload
+async function reloadBound(sessions: Session[], bridges: Bridge[]) {
+  for (const session of sessions) {
+    const bridge = session.channel ? bridges.find((b) => b.status.channel === session.channel) : undefined
+    if (!bridge || !needsReload(session, bridge.status.nonce, bridge.status.reload)) continue
+    const { nonce } = bridge.status
+    await update(session.tabId, (s) => [s && markReloaded(s, nonce), null])
+    await browser.tabs.reload(session.tabId).catch(() => undefined)
+  }
+}
+
 function openSidebar(windowId: number) {
   const firefox = (browser as unknown as { sidebarAction?: { open(): Promise<void> } }).sidebarAction
   if (firefox) void firefox.open()
   else void browser.sidePanel?.open({ windowId })
+}
+
+function capitalized(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1)
 }

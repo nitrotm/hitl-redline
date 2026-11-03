@@ -1,0 +1,26 @@
+{
+  "name": "@redline/pi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "hitl-redline for pi: the redline skill, and a redline_wait tool that starts a turn when the user sends a round",
+  "type": "module",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "scripts": {
+    "typecheck": "run -T tsc -p ."
+  },
+  "devDependencies": {
+    "@redline/shared": "workspace:^",
+    "@types/node": "^24",
+    "typebox": "1.3.27"
+  }
+}

@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import {
   addAnnotation,
+  bindChannel,
   buildRound,
   closeSnapshot,
   createSession,
   currentSnapshot,
   deleteAnnotation,
   deleteSnapshot,
+  markReloaded,
+  needsReload,
   openSnapshot,
   queueRound,
   roundSent,
@@ -230,5 +233,35 @@ describe('submitStatus', () => {
     expect(submitStatus({ ...empty, comment: ' ' })).toBe('done')
     expect(submitStatus({ ...empty, comment: 'Tighter' })).toBe('feedback')
     expect(submitStatus(drawn())).toBe('feedback')
+  })
+})
+
+describe('channels', () => {
+  it("bind a session to its Claude's channel, from creation or later", () => {
+    expect(createSession(1, 's', 'brave-cat').channel).toBe('brave-cat')
+    expect(createSession(1, 's').channel).toBeUndefined()
+    expect(bindChannel(createSession(1, 's'), 'calm-dog').channel).toBe('calm-dog')
+    const session = createSession(1, 's', 'brave-cat')
+    expect(bindChannel(session, 'brave-cat')).toBe(session)
+  })
+})
+
+describe('the agent and reloads', () => {
+  it("keep the agent's name with its channel, and drop it for another's", () => {
+    const named = bindChannel(createSession(1, 's'), 'brave-cat', 'Codex')
+    expect(named).toMatchObject({ channel: 'brave-cat', agent: 'Codex' })
+    // the same channel, its wait unnamed this time: the name stays
+    expect(bindChannel(named, 'brave-cat').agent).toBe('Codex')
+    expect(bindChannel(named, 'calm-dog').agent).toBeUndefined()
+    expect(bindChannel(named, 'calm-dog', 'pi').agent).toBe('pi')
+  })
+
+  it('reload a tab once per run of a wait that asks for it', () => {
+    const session = createSession(1, 's', 'brave-cat')
+    expect(needsReload(session, 'run-1', true)).toBe(true)
+    expect(needsReload(session, 'run-1', undefined)).toBe(false)
+    const reloaded = markReloaded(session, 'run-1')
+    expect(needsReload(reloaded, 'run-1', true)).toBe(false)
+    expect(needsReload(reloaded, 'run-2', true)).toBe(true)
   })
 })

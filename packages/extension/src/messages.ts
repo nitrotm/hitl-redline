@@ -31,12 +31,16 @@ export type Request =
   // the screenshot of a snapshot, for the overlay, which cannot read the extension's IndexedDB
   | { type: 'snapshot/image'; tabId?: number; snapshotId: string }
   | { type: 'comment/set'; tabId?: number; comment: string }
-  // Claude's reply to the last round, as the bridge serves it; and an answer to one of its questions
+  // the agent's reply to the last round, as the bridge serves it; and an answer to one of its questions
   | { type: 'reply/store'; tabId?: number; reply: Reply }
   | { type: 'answer/set'; tabId?: number; question: string; answer: string }
   | { type: 'round/submit'; tabId?: number; status: RoundStatus }
   // what the page's framework knows of the element marked with the nonce (src/frameworks.ts)
   | { type: 'page/inspect'; tabId?: number; nonce: string }
+  // the tab's rounds, to that channel's agent from now on
+  | { type: 'session/bind'; tabId?: number; channel: string; agent?: string }
+  // the user's token, pasted in the sidebar (`redline token`)
+  | { type: 'pair/set'; token: string }
   | { type: 'outbox/flush' }
   | { type: 'whoami' }
 
@@ -58,6 +62,8 @@ export interface Responses {
   'answer/set': null
   'round/submit': null
   'page/inspect': Rendered | null
+  'session/bind': null
+  'pair/set': null
   'outbox/flush': null
   // the tab of the sender
   whoami: number

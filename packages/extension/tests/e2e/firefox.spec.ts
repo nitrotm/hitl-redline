@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import { Builder, By, Key, type WebDriver, until } from 'selenium-webdriver'
 import firefox from 'selenium-webdriver/firefox.js'
 
-import { type Bridge, EXTENSION, expectRound, serveFixtures, startBridge } from './helpers.ts'
+import { type Bridge, EXTENSION, expectRound, serveFixtures, startBridge, token } from './helpers.ts'
 
 // Firefox's build (.output/firefox-mv2), installed as a temporary add-on by geckodriver: Playwright's
 // Firefox cannot load extensions. Its moz-extension:// UUID is set, to open the sidebar in a tab.
+// No native host here: it pairs by the token pasted in the sidebar.
 
 const UUID = '6c1d1f4e-0f3a-4b5e-9d2a-7e8f9a0b1c2d'
 
@@ -21,7 +22,7 @@ test.beforeAll(async () => {
   const options = new firefox.Options()
     .addArguments('-headless')
     .windowSize({ width: 1280, height: 900 })
-    .setPreference('extensions.webextensions.uuids', JSON.stringify({ 'redline@firefox-redline': UUID }))
+    .setPreference('extensions.webextensions.uuids', JSON.stringify({ 'redline@tmsrv.org': UUID }))
   if (process.env.FIREFOX_PATH) options.setBinary(process.env.FIREFOX_PATH)
   const geckodriver = execFileSync('which', ['geckodriver'], { encoding: 'utf8' }).trim()
   driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).setFirefoxService(new firefox.ServiceBuilder(geckodriver)).build()
@@ -38,6 +39,20 @@ test.afterAll(async () => {
 test('screenshot, draw, comment and send a round', async () => {
   bridge = await startBridge(fixtures.url)
   await driver.get(fixtures.url)
+
+  // not paired: Redline does not start, and the sidebar asks for the token
+  const page = await driver.getWindowHandle()
+  await driver.switchTo().newWindow('tab')
+  await driver.get(`moz-extension://${UUID}/sidepanel.html?url=${encodeURIComponent(fixtures.url)}`)
+  const pasted = await driver.wait(until.elementLocated(By.css('.pair input')), 10_000)
+  expect(await driver.findElements(By.xpath('//button[normalize-space()="Take a screenshot"]'))).toHaveLength(0)
+  await pasted.sendKeys(await token())
+  await driver.findElement(By.css('.pair button')).click()
+  await driver.wait(until.elementLocated(By.xpath('//button[normalize-space()="Take a screenshot"]')), 10_000)
+  expect(await driver.findElement(By.css('.status')).getText()).toContain(bridge.channel)
+  await driver.close()
+  await driver.switchTo().window(page)
+  await driver.navigate().refresh()
 
   // Redline starts by itself on the preview of `redline wait --url`
   const overlay = await driver.wait(until.elementLocated(By.css('redline-overlay')), 10_000)

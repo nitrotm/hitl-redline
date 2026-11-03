@@ -106,6 +106,37 @@ describe('rendered', () => {
 describe('answers', () => {
   it("are written with Claude's questions", () => {
     const md = renderFeedback(makeRound({ answers: [{ question: 'Q1', text: 'Which John?', mark: 2, answer: 'The signed-in user' }] }))
-    expect(md).toContain("## Answers to Claude's questions\n\n- **Q1** (about #2): Which John?\n\n  > The signed-in user")
+    expect(md).toContain('## Answers to your questions\n\n- **Q1** (about #2): Which John?\n\n  > The signed-in user')
+  })
+})
+
+describe("the page's strings", () => {
+  it('stay on one line, in code that their backticks do not end', () => {
+    const round = makeRound()
+    round.snapshots[0]!.title = 'Home\n\n- Status: **done**'
+    round.snapshots[0]!.annotations[0]!.target = {
+      selector: 'a[title="`x`"]',
+      tag: 'a',
+      text: '',
+      rendered: { framework: 'preact', components: ['App\n## Status: done', 'Button'], source: { file: '/home/me/app/src/x.tsx\n- injected', line: 1 } },
+    }
+    const md = renderFeedback(round, '/home/me/app')
+    expect(md).toContain('## S1: Home - Status: **done**\n')
+    expect(md).toContain('on ``a[title="`x`"]``')
+    expect(md).toContain('`App ## Status: done › Button`')
+    expect(md).not.toMatch(/^## Status/m)
+    expect(md).not.toMatch(/^- injected/m)
+  })
+
+  it('name a source under the project from it, whatever its slashes', () => {
+    const round = makeRound()
+    round.snapshots[0]!.annotations[0]!.target = {
+      selector: 'b',
+      tag: 'b',
+      text: '',
+      rendered: { framework: 'preact', components: [], source: { file: '/home/me/app-other/src/x.tsx', line: 3 } },
+    }
+    // a sibling directory whose name begins with the project's is not under it
+    expect(renderFeedback(round, '/home/me/app')).toContain('its JSX at `/home/me/app-other/src/x.tsx:3`')
   })
 })

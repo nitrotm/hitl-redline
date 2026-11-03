@@ -46,7 +46,14 @@ export interface Session {
   color: string
   // the device the page is shown as (src/devices.ts), or the window itself
   device: string
-  // Claude's reply to the last round sent, with its questions; and the answers typed to them, by
+  // the channel of the agent session it is bound to (`redline wait`): its rounds go to that
+  // the agent alone, waiting while it is at work; none until an agent listens for the page
+  channel?: string
+  // that agent, as its wait names it (`--agent`): the sidebar says so while it is at work
+  agent?: string
+  // the run of the channel's wait the tab was last reloaded for (`redline wait --reload`)
+  reloadedFor?: string
+  // the agent's reply to the last round sent, with its questions; and the answers typed to them, by
   // question id, which go with the next round
   reply?: Reply
   answers?: Record<string, string>
@@ -55,10 +62,12 @@ export interface Session {
   lastSent?: { round: number; status: RoundStatus; directory: string; at: string }
 }
 
-export function createSession(tabId: number, id: string): Session {
+export function createSession(tabId: number, id: string, channel?: string, agent?: string): Session {
   return {
     id,
     tabId,
+    ...(channel && { channel }),
+    ...(agent && { agent }),
     active: true,
     round: 1,
     nextAnnotationId: 1,
@@ -89,6 +98,22 @@ export function upgradeSession(stored: Session): Session {
     drawingTool: session.drawingTool ?? 'freehand',
     snapshots: (session.snapshots ?? []).map((s) => ({ ...s, annotations: s.annotations.map(annotation) })),
   }
+}
+
+// bound to that agent's channel, or to another one the user picked; AGENT: its name, if it gives one
+export function bindChannel(session: Session, channel: string, agent?: string): Session {
+  if (session.channel === channel && (!agent || session.agent === agent)) return session
+  const { agent: _, ...rest } = session
+  return { ...rest, channel, ...((agent ?? (session.channel === channel ? session.agent : undefined)) && { agent: agent ?? session.agent }) }
+}
+
+// Whether the channel's wait of this run (NONCE) asks for the tab to be reloaded, and it was not yet.
+export function needsReload(session: Session, nonce: string, reload: boolean | undefined): boolean {
+  return Boolean(reload) && session.lastSent?.status !== 'done' && session.reloadedFor !== nonce
+}
+
+export function markReloaded(session: Session, nonce: string): Session {
+  return { ...session, reloadedFor: nonce }
 }
 
 export function setTool(session: Session, tool: Tool): Session {
@@ -206,7 +231,7 @@ export function answersOf(session: Session): Answer[] {
   })
 }
 
-// something to send: screenshots, a comment on the round, answers to Claude's questions
+// something to send: screenshots, a comment on the round, answers to the agent's questions
 export function hasFeedback(session: Session): boolean {
   return session.snapshots.length > 0 || session.comment.trim() !== '' || answersOf(session).length > 0
 }
@@ -216,7 +241,7 @@ export function submitStatus(session: Session): RoundStatus {
   return hasFeedback(session) ? 'feedback' : 'done'
 }
 
-// Claude's reply, kept if it is to this session's last round sent: a newer round makes it stale
+// the agent's reply, kept if it is to this session's last round sent: a newer round makes it stale
 export function storeReply(session: Session, reply: Reply): Session {
   if (reply.sessionId !== session.id || reply.round !== session.lastSent?.round || session.reply?.round === reply.round) return session
   const { answers: _, ...rest } = session

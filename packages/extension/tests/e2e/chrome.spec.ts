@@ -1,11 +1,11 @@
-import { type BrowserContext, chromium, expect, test } from '@playwright/test'
+import { type BrowserContext, type Page, chromium, expect, test } from '@playwright/test'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { type Bridge, EXTENSION, expectRound, readPng, serveFixtures, startBridge } from './helpers.ts'
+import { type Bridge, EXTENSION, chromiumUserData, expectRound, readPng, serveFixtures, startBridge } from './helpers.ts'
 
 // Chrome's build (.output/chrome-mv3) in the dev shell's Chromium ($CHROMIUM_PATH), which still
-// loads an unpacked extension.
+// loads an unpacked extension. It pairs with the bridges through the native host, in its user data.
 
 let context: BrowserContext
 let fixtures: Awaited<ReturnType<typeof serveFixtures>>
@@ -14,7 +14,7 @@ let bridge: Bridge
 test.beforeAll(async () => {
   fixtures = await serveFixtures()
   const path = join(EXTENSION, 'chrome-mv3')
-  context = await chromium.launchPersistentContext('', {
+  context = await chromium.launchPersistentContext(await chromiumUserData(), {
     executablePath: process.env.CHROMIUM_PATH,
     headless: true,
     // Playwright's defaults turn extensions off
@@ -125,6 +125,8 @@ test('screenshot, draw, comment and send a round', async () => {
   const comments = sidebar.locator('.marks textarea')
   await expect(comments).toHaveCount(2)
   await expect(comments.nth(0)).toHaveValue('Make the button bigger')
+  // the agent, by the name its wait gives
+  await expect(sidebar.locator('.status')).toContainText('Claude is listening')
 
   // selected in the sidebar, selected on the page
   await sidebar.locator('.marks li .badge').first().click()
@@ -173,6 +175,8 @@ test('screenshot, draw, comment and send a round', async () => {
   )
   bridge = await startBridge(fixtures.url, ['--reply', replyFile])
   await expect(sidebar.locator('.reply')).toContainText('padding 8 → 16px')
+  // in the footer, right above the button that sends the next round
+  await expect(sidebar.locator('footer .reply + .actions')).toBeVisible()
   await expect(sidebar.getByRole('button', { name: 'Take a screenshot' })).toBeVisible()
   await expect(sidebar.locator('.question')).toContainText('How much less space?')
   await sidebar.locator('.question textarea').fill('Half of it')
@@ -181,7 +185,7 @@ test('screenshot, draw, comment and send a round', async () => {
   const { code, stdout } = await bridge.done
   expect(code, stdout).toBe(0)
   const answered = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
-  expect(answered).toContain("## Answers to Claude's questions\n\n- **Q1** (about #2): How much less space?\n\n  > Half of it")
+  expect(answered).toContain('## Answers to your questions\n\n- **Q1** (about #2): How much less space?\n\n  > Half of it')
   await expect(sidebar.locator('.reply')).toHaveCount(0)
 
   await sidebar.close()
@@ -266,4 +270,107 @@ test('name the Preact components of a mark, and where its JSX is', async () => {
   expect(code, stdout).toBe(0)
   const md = await readFile(join(bridge.dir, 'rounds', '001', 'feedback.md'), 'utf8')
   expect(md).toContain('  - Preact: `App › Hero › Button`, its JSX at `/project/src/App.tsx:3:5`')
+})
+
+test('two Claude sessions on the same app: each tab sends to its own, and waits for it', async () => {
+  // a mark on the page, sent with Ctrl+D
+  const markAndSend = async (page: Page, comment: string) => {
+    await page.bringToFront()
+    await page.keyboard.press('Control+s')
+    await expect(page.locator('redline-overlay .frozen')).toBeVisible()
+    await page.keyboard.press('2')
+    await page.mouse.move(100, 100)
+    await page.mouse.down()
+    await page.mouse.move(200, 160, { steps: 4 })
+    await page.mouse.up()
+    await page.keyboard.type(comment)
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Control+d')
+  }
+
+  // each Claude starts its wait, then opens its tab: the tab binds to that Claude
+  let a = await startBridge(fixtures.url, ['--session', 'claude-a'])
+  const pageA = await context.newPage()
+  await pageA.goto(fixtures.url)
+  await expect(pageA.locator('redline-overlay')).toBeAttached()
+  const b = await startBridge(fixtures.url, ['--session', 'claude-b'])
+  expect(b.channel).not.toBe(a.channel)
+  const pageB = await context.newPage()
+  await pageB.goto(fixtures.url)
+  await expect(pageB.locator('redline-overlay')).toBeAttached()
+
+  await markAndSend(pageB, 'For B')
+  expect((await b.done).code).toBe(0)
+  expect(await readFile(join(b.dir, 'rounds', '001', 'feedback.md'), 'utf8')).toContain('> For B')
+
+  // A's screenshot, then A's Claude goes to work (no wait), while B's waits again: A's round
+  // stays in the browser, rather than go to B
+  await pageA.bringToFront()
+  await pageA.keyboard.press('Control+s')
+  await expect(pageA.locator('redline-overlay .frozen')).toBeVisible()
+  a.process.kill()
+  await a.done
+  const b2 = await startBridge(fixtures.url, ['--session', 'claude-b'])
+  expect(b2.channel).toBe(b.channel)
+  await pageA.keyboard.press('2')
+  await pageA.mouse.move(100, 100)
+  await pageA.mouse.down()
+  await pageA.mouse.move(200, 160, { steps: 4 })
+  await pageA.mouse.up()
+  await pageA.keyboard.type('For A')
+  await pageA.keyboard.press('Enter')
+  await pageA.keyboard.press('Control+d')
+  await pageA.waitForTimeout(3000)
+  expect(b2.process.exitCode).toBeNull()
+
+  // A's Claude waits again: the round goes to it, at the next try (the sidebar's, here)
+  a = await startBridge(fixtures.url, ['--session', 'claude-a'])
+  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+  const extensionPage = await context.newPage()
+  await extensionPage.goto(`chrome-extension://${new URL(worker.url()).host}/sidepanel.html`)
+  type Runtime = { chrome: { runtime: { sendMessage(message: unknown): Promise<unknown> } } }
+  await extensionPage.evaluate(() => (globalThis as unknown as Runtime).chrome.runtime.sendMessage({ type: 'outbox/flush' }))
+  const { code, stdout } = await a.done
+  expect(code, stdout).toBe(0)
+  expect(await readFile(join(a.dir, 'rounds', '001', 'feedback.md'), 'utf8')).toContain('> For A')
+  expect(b2.process.exitCode).toBeNull()
+  b2.process.kill()
+  await pageA.close()
+  await pageB.close()
+  await extensionPage.close()
+})
+
+test("reload the tabs whose agent asks, and not another agent's", async () => {
+  const a = await startBridge(fixtures.url, ['--session', 'reload-a'])
+  const pageA = await context.newPage()
+  await pageA.goto(fixtures.url)
+  await expect(pageA.locator('redline-overlay')).toBeAttached()
+  const b = await startBridge(fixtures.url, ['--session', 'reload-b'])
+  const pageB = await context.newPage()
+  await pageB.goto(fixtures.url)
+  await expect(pageB.locator('redline-overlay')).toBeAttached()
+  // what a reload loses
+  for (const page of [pageA, pageB]) await page.evaluate(() => ((window as unknown as { marked: boolean }).marked = true))
+  const marked = (page: Page) => page.evaluate(() => (window as unknown as { marked?: boolean }).marked === true)
+
+  // A's agent changed the page, and cannot reload it itself: its next wait asks for it
+  a.process.kill()
+  await a.done
+  const again = await startBridge(fixtures.url, ['--session', 'reload-a', '--reload'])
+  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+  const extensionPage = await context.newPage()
+  await extensionPage.goto(`chrome-extension://${new URL(worker.url()).host}/sidepanel.html`)
+  type Runtime = { chrome: { runtime: { sendMessage(message: unknown): Promise<unknown> } } }
+  await extensionPage.evaluate(() => (globalThis as unknown as Runtime).chrome.runtime.sendMessage({ type: 'outbox/flush' }))
+  await expect.poll(() => marked(pageA).catch(() => false)).toBe(false)
+  expect(await marked(pageB)).toBe(true)
+
+  // once per run: it stays as it is now
+  await pageA.evaluate(() => ((window as unknown as { marked: boolean }).marked = true))
+  await extensionPage.evaluate(() => (globalThis as unknown as Runtime).chrome.runtime.sendMessage({ type: 'outbox/flush' }))
+  await pageA.waitForTimeout(1000)
+  expect(await marked(pageA)).toBe(true)
+
+  for (const bridge of [again, b]) bridge.process.kill()
+  for (const page of [pageA, pageB, extensionPage]) await page.close()
 })

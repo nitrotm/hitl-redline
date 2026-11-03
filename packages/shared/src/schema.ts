@@ -45,7 +45,7 @@ export const Rendered = z.object({
 })
 export type Rendered = z.infer<typeof Rendered>
 
-// the element under an annotation, for Claude to find it in the sources
+// the element under an annotation, for the agent to find it in the sources
 export const Target = z.object({
   selector: z.string(),
   tag: z.string(),
@@ -108,11 +108,11 @@ export const SnapshotWithImages = Snapshot.extend({
 })
 export type SnapshotWithImages = z.infer<typeof SnapshotWithImages>
 
-// 'done' ends the /redline loop: Claude stops waiting for another round
+// 'done' ends the /redline loop: the agent stops waiting for another round
 export const RoundStatus = z.enum(['feedback', 'done'])
 export type RoundStatus = z.infer<typeof RoundStatus>
 
-// Claude's reply to a round, shown in the sidebar until the next one is sent: what it did of each
+// the agent's reply to a round, shown in the sidebar until the next one is sent: what it did of each
 // mark, and what it asks. `redline wait --reply` serves it.
 export const Question = z.object({
   // Q1, Q2…
@@ -133,7 +133,7 @@ export const Reply = z.object({
 })
 export type Reply = z.infer<typeof Reply>
 
-// the user's answer to one of the reply's questions, with the question, for Claude to read together
+// the user's answer to one of the reply's questions, with the question, for the agent to read together
 export const Answer = z.object({ question: z.string(), text: z.string(), mark: z.number().int().positive().optional(), answer: z.string() })
 export type Answer = z.infer<typeof Answer>
 

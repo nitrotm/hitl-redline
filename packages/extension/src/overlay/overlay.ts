@@ -226,8 +226,10 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     }
   }
 
+  // The page's own scripts reach the overlay's shadow root and its window: what they dispatch
+  // (isTrusted false) draws nothing, and sends nothing to the agent.
   svg.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || !snapshot) return
+    if (!e.isTrusted || e.button !== 0 || !snapshot) return
     if (session.tool !== 'freehand') finishStrokes()
     if (editing !== null) closePopover(true)
     const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
@@ -271,6 +273,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   })
 
   svg.addEventListener('pointerup', (e) => {
+    if (!e.isTrusted) return
     const done = gesture
     gesture = null
     if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId)
@@ -374,7 +377,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   // last drawn whose box, or badge, is there (a rectangle's inside takes the pointer only with the
   // select tool). With the pen, its clicks may have been dots: dropped.
   svg.addEventListener('dblclick', (e) => {
-    if (!snapshot) return
+    if (!e.isTrusted || !snapshot) return
     const shape = (e.target as Element).closest<SVGGElement>('[data-id]')
     const p = page(e)
     const within = (box: { x: number; y: number; width: number; height: number }) =>
@@ -462,14 +465,16 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   // the mark, deleted from its comment box; the box keeps the focus until the click is done
   const trash = popover.querySelector<HTMLButtonElement>('.trash')!
   trash.addEventListener('pointerdown', (e) => e.preventDefault())
-  trash.addEventListener('click', () => {
+  trash.addEventListener('click', (e) => {
+    if (!e.isTrusted) return
     const id = editing
     closePopover(false)
     if (id === NEW) deleteOnAdd = true
     else if (id !== null) void send({ type: 'annotation/delete', id }).catch(report)
   })
 
-  comment.addEventListener('input', () => {
+  comment.addEventListener('input', (e) => {
+    if (!e.isTrusted) return
     clearTimeout(saveTimer)
     saveTimer = setTimeout(saveComment, SAVE_MS)
   })
@@ -486,6 +491,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   })
 
   toolbar.addEventListener('click', (e) => {
+    if (!e.isTrusted) return
     const button = (e.target as Element).closest<HTMLButtonElement>('button')
     if (!button) return
     if (button.dataset.tool) setTool(button.dataset.tool as Tool)
@@ -522,7 +528,12 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
     if (editing !== null) closePopover(true)
     const status = submitStatus(session)
     void send({ type: 'round/submit', status }).then(
-      () => notify(status === 'done' ? 'Done: Claude stops waiting for rounds' : `Round ${session.round} sent to Claude`),
+      () =>
+        notify(
+          status === 'done'
+            ? `Done: ${session.agent ?? 'your agent'} stops waiting for rounds`
+            : `Round ${session.round} sent to ${session.agent ?? 'your agent'}`
+        ),
       report
     )
   }
@@ -537,7 +548,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.altKey || e.metaKey) return
+    if (!e.isTrusted || e.altKey || e.metaKey) return
     // a new screenshot, from wherever the focus is: Ctrl+S, the browser's Save Page otherwise, which
     // yields to the page that takes it (S by its letter: a screenshot, on any layout). Of the live
     // page only: on a screenshot, it goes back to the live page, for the next one.
@@ -548,7 +559,7 @@ export function mountOverlay(doc: Document, initial: Session): Overlay {
       if (editing !== null) closePopover(true)
       return act('close')
     }
-    // the round to Claude, from wherever the focus is: Ctrl+D, the browser's bookmark otherwise; Done
+    // the round to the agent, from wherever the focus is: Ctrl+D, the browser's bookmark otherwise; Done
     // when there is nothing to send. The comment being typed, and the pen's strokes, go first.
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'd') {
       e.preventDefault()

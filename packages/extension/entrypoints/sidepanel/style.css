@@ -302,12 +302,18 @@ textarea:focus {
   border-color: var(--accent);
 }
 
-/* Claude's reply to the last round */
+/* the agent's reply to the last round, in the footer, just above the button that sends the next */
 .reply {
   background: color-mix(in srgb, var(--ok) 6%, var(--bg));
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+footer .reply {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--line));
+  border-radius: 8px;
 }
 
 .reply h2 {
@@ -471,4 +477,42 @@ kbd {
   padding: 0 4px;
   border: 1px solid var(--line);
   border-radius: 4px;
+}
+
+.status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the Claude the tab sends to, among those of its app */
+.channel-picker {
+  margin-left: auto;
+  flex: none;
+  max-width: 50%;
+  font: inherit;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pair p {
+  margin: 0 0 8px;
+}
+
+.pair form {
+  display: flex;
+  gap: 6px;
+}
+
+.pair input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
 }

@@ -33,7 +33,7 @@ let
 in
 pkgs.stdenv.mkDerivation (finalAttrs: {
   pname = "redline-workspace";
-  version = "0.1.0";
+  version = "1.0.0";
   inherit src;
 
   # yarn.lock's packages that carry no checksum of their own (yarn-berry-fetcher
@@ -43,7 +43,7 @@ pkgs.stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) src missingHashes;
 
     # after a change of yarn.lock: the hash nix says it got
-    hash = "sha256-9uj7/pd2kpIVXainMyvrJ+qTObQxwq9Ij0APmh+sXCU=";
+    hash = "sha256-bMlF8Pdo7tDIVeqvvZuIBmsKzdKtM2WRtXD4Ornc4y0=";
   };
 
   nativeBuildInputs = [
@@ -74,6 +74,9 @@ pkgs.stdenv.mkDerivation (finalAttrs: {
     cp -r packages/extension/.output/chrome-mv3 $out/chrome
     (cd $out/firefox && zip -qr $out/redline.xpi .)
     cp packages/bridge/dist/redline.mjs $out/bridge/
+    # the skill, for `redline install --skills` (Codex, pi)
+    mkdir -p $out/skills
+    cp -r claude/skills/redline $out/skills/
     runHook postInstall
   '';
 })

@@ -1,10 +1,10 @@
-// Serves e2e-fixtures/ on http://127.0.0.1:PORT (default 47391), for the end-to-end tests and a try by hand.
+// Serves e2e-fixtures/ on http://127.0.0.1:PORT (default 47380, below the bridges' 47390-47399), for the end-to-end tests and a try by hand.
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
 
 const root = import.meta.dirname
-const port = Number(process.argv[2] ?? 47391)
+const port = Number(process.argv[2] ?? 47380)
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript' }
 
 createServer(async (req, res) => {

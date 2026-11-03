@@ -1,6 +1,6 @@
 import type { PathStep, Target } from '@redline/shared'
 
-// The element under a mark, named so Claude can find it in the sources: a CSS selector short
+// The element under a mark, named so the agent can find it in the sources: a CSS selector short
 // enough to read, unique in the document when it can be, the start of its text, and its whole
 // path from under <body>.
 

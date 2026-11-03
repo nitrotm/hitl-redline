@@ -1,12 +1,33 @@
 import { type ChildProcess, spawn } from 'node:child_process'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtempSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { type Server, createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PNG } from 'pngjs'
 
+import { readOrCreateToken } from '../../../bridge/src/home.ts'
+import { nativeManifest, writeHostScript } from '../../../bridge/src/native.ts'
+
 const ROOT = join(import.meta.dirname, '../../../..')
 export const EXTENSION = join(ROOT, 'packages/extension/.output')
+const CLI = join(ROOT, 'packages/bridge/src/cli.ts')
+
+// the token and the channels of the tests' bridges, never the user's
+process.env.REDLINE_HOME = mkdtempSync(join(tmpdir(), 'redline-e2e-home-'))
+
+export function token(): Promise<string> {
+  return readOrCreateToken()
+}
+
+// Chromium's user data directory, with the native host in it: the extension pairs by itself
+export async function chromiumUserData(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'redline-e2e-chromium-'))
+  await mkdir(join(dir, 'NativeMessagingHosts'))
+  const manifest = nativeManifest('chrome', await writeHostScript(CLI))
+  await writeFile(join(dir, 'NativeMessagingHosts', 'redline_bridge.json'), JSON.stringify(manifest))
+  return dir
+}
 
 // e2e-fixtures/, on a free port of the loopback
 export async function serveFixtures(): Promise<{ url: string; close: () => void }> {
@@ -26,6 +47,8 @@ export async function serveFixtures(): Promise<{ url: string; close: () => void 
 
 export interface Bridge {
   dir: string
+  // its channel, as it says
+  channel: string
   // its output, once it exits
   done: Promise<{ code: number | null; stdout: string }>
   process: ChildProcess
@@ -34,7 +57,8 @@ export interface Bridge {
 // `redline wait`, from the sources, on the extension's port
 export async function startBridge(previewUrl: string, extra: string[] = []): Promise<Bridge> {
   const dir = await mkdtemp(join(tmpdir(), 'redline-e2e-'))
-  const child = spawn(process.execPath, [join(ROOT, 'packages/bridge/src/cli.ts'), 'wait', '--url', previewUrl, '--dir', dir, ...extra], {
+  // named as the sidebar shows it, which the tests look for
+  const child = spawn(process.execPath, [CLI, 'wait', '--agent', 'Claude', '--url', previewUrl, '--dir', dir, ...extra], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let stdout = ''
@@ -54,7 +78,7 @@ export async function startBridge(previewUrl: string, extra: string[] = []): Pro
       }
     }, 50)
   })
-  return { dir, done, process: child }
+  return { dir, channel: /redline: ([a-z]+-[a-z]+) waiting/.exec(stdout)![1]!, done, process: child }
 }
 
 export async function readPng(path: string): Promise<PNG> {

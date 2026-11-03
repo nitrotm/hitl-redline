@@ -1,6 +1,6 @@
 import type { PathStep } from './schema.ts'
 
-// The path to an element, as Claude reads it: short steps (button.cta[1/2]), the same step one
+// The path to an element, as the agent reads it: short steps (button.cta[1/2]), the same step one
 // after the other once (div ×3), and the steps into a shadow root marked.
 
 export function stepText(step: PathStep): string {

@@ -1,23 +1,24 @@
 import { Fragment } from 'preact'
 import { useEffect, useErrorBoundary, useRef, useState } from 'preact/hooks'
 
-import type { Annotation, Reply, Snapshot, Status } from '@redline/shared'
+import type { Annotation, Reply, Snapshot } from '@redline/shared'
 
 import { DEVICES, WINDOW } from '@/src/devices.ts'
 import { RECT_STROKE, badgeFor, fillPath } from '@/src/geometry.ts'
 import { type Request, send } from '@/src/messages.ts'
 import { type Session, hasFeedback, submitStatus } from '@/src/state/session.ts'
 
-import { type ActiveTab, useActiveTab, useBridge, useImage, useSession } from './hooks.ts'
+import { type ActiveTab, type Listening, useActiveTab, useImage, useListening, useSession } from './hooks.ts'
 
 // The sidebar: the snapshots of the active tab's session, their marks with a comment each, and
-// the buttons that send the round to Claude. Whether Claude listens is at the bottom.
+// the buttons that send the round to the agent. Whether the agent listens is at the bottom.
 
 export function App() {
   const tab = useActiveTab()
   const session = useSession(tab?.id)
-  const bridge = useBridge(tab?.url, session?.id, Boolean(session?.pending))
-  // Claude's reply to this session's last round, as the bridge serves it: kept in the session
+  const listening = useListening(tab, session)
+  const bridge = listening.bridge?.status
+  // the agent's reply to this session's last round, as the bridge serves it: kept in the session
   const reply = bridge?.reply
   useEffect(() => {
     if (tab && session && reply && reply.sessionId === session.id && reply.round === session.lastSent?.round && session.reply?.round !== reply.round)
@@ -46,13 +47,13 @@ export function App() {
           <p class="empty">No tab.</p>
         ) : live ? (
           <Guard tab={tab} ask={ask}>
-            <SessionView tab={tab} session={live} ask={ask} listening={Boolean(bridge)} />
+            <SessionView tab={tab} session={live} ask={ask} listening={listening} />
           </Guard>
         ) : (
-          <Start tab={tab} session={session} ask={ask} listening={Boolean(bridge)} />
+          <Start tab={tab} session={session} ask={ask} listening={listening} />
         )}
       </main>
-      <StatusBar status={bridge} />
+      <StatusBar tab={tab} session={session} listening={listening} ask={ask} />
     </div>
   )
 }
@@ -79,18 +80,68 @@ function Guard({ tab, ask, children }: { tab: ActiveTab; ask: Ask; children: pre
   )
 }
 
-function StatusBar({ status }: { status: Status | undefined }) {
-  const project = status?.project.split('/').filter(Boolean).at(-1)
+// the channel the tab is bound to, while its session goes on
+function boundChannel(session: Session | undefined): string | undefined {
+  return session && session.lastSent?.status !== 'done' ? session.channel : undefined
+}
+
+// The agent of the tab, as its wait names it (`--agent`): the one listening, or the one it is
+// bound to, at work; "your agent" when none says.
+function agentOf(listening: Listening, session: Session | undefined): string {
+  return listening.bridge?.status.agent ?? (boundChannel(session) ? session?.agent : undefined) ?? 'your agent'
+}
+
+function capitalized(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+function baseName(path: string): string | undefined {
+  return path.split(/[\\/]/).filter(Boolean).at(-1)
+}
+
+// Whether the agent of the tab listens, and which: its channel's name, and its project. With
+// several agents for the page's app, the one the tab sends its rounds to, to pick another.
+function StatusBar({ tab, session, listening, ask }: { tab: ActiveTab | undefined; session: Session | undefined; listening: Listening; ask: Ask }) {
+  const status = listening.bridge?.status
+  const bound = boundChannel(session)
+  const project = status && baseName(status.project)
+  const agent = capitalized(agentOf(listening, session))
+  const text = status
+    ? `${agent} is listening · ${status.channel}${project ? ` · ${project}` : ''}`
+    : bound
+      ? `${agent} · ${bound} is at work: the next round waits for it`
+      : 'No agent is listening'
+  const choices = [
+    ...new Map([...(bound ? [[bound, ''] as const] : []), ...listening.candidates.map((b) => [b.status.channel, baseName(b.status.project) ?? ''] as const)]),
+  ]
   return (
-    <div class={`status ${status ? 'on' : ''}`} title={status ? `redline wait, in ${status.project}` : 'Run /redline in Claude Code'}>
+    <div class={`status ${status ? 'on' : ''}`} title={status ? `redline wait, in ${status.project}` : 'Ask your agent to review the page (/redline)'}>
       <span class="dot" />
-      {status ? `Claude is listening${project ? ` · ${project}` : ''}` : 'Claude is not listening'}
+      <span class="status-text">{text}</span>
+      {tab && session && choices.length > 1 && (
+        <select
+          class="channel-picker"
+          title="The agent this tab sends its rounds to"
+          value={bound ?? status?.channel}
+          onChange={(e) => {
+            const channel = e.currentTarget.value
+            const agent = listening.candidates.find((b) => b.status.channel === channel)?.status.agent
+            void ask({ type: 'session/bind', tabId: tab.id, channel, ...(agent && { agent }) })
+          }}>
+          {choices.map(([channel, project]) => (
+            <option key={channel} value={channel}>
+              {channel}
+              {project && ` · ${project}`}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   )
 }
 
 // the keys, one per row: a key's names are joined by +, keys side by side are alternatives
-// the shortcuts that need Claude listening: a screenshot is for it, a round goes to it
+// the shortcuts that need the agent listening: a screenshot is for it, a round goes to it
 const FOR_CLAUDE = new Set(['Ctrl+S', 'Ctrl+D'])
 
 const SHORTCUTS: [string[][], string][] = [
@@ -101,7 +152,7 @@ const SHORTCUTS: [string[][], string][] = [
   [[['4']], 'Pen; strokes close in time make one mark'],
   [[['Q'], ['W'], ['E'], ['R']], 'Colors, by place: the row under 1 to 4'],
   [[['Ctrl', 'Z']], 'Undo the last mark'],
-  [[['Ctrl', 'D']], 'Send to Claude; Done when there is nothing to send'],
+  [[['Ctrl', 'D']], 'Send the round to your agent; Done when there is nothing to send'],
   [[['Del']], 'Delete the selected mark'],
   [[['Double-click']], "Edit a mark's comment"],
   [[['Enter'], ['Esc']], 'Save, close the comment'],
@@ -157,16 +208,70 @@ function DevicePicker({ tabId, session, ask, disabled }: { tabId: number; sessio
   )
 }
 
-// Claude not listening for this page: nothing to take a screenshot for
-function NotListening() {
+// The agent not listening for this page: nothing to take a screenshot for. Why, when it can be told:
+// its agent is at work, another page is the one listened for, or the browser is not paired.
+function NotListening({ session, listening, ask }: { session: Session | undefined; listening: Listening; ask: Ask }) {
+  const bound = boundChannel(session)
+  const agent = capitalized(agentOf(listening, session))
+  // never paired, and a redline listens: the pairing first
+  if (!listening.paired && listening.unpaired) return <PairBox ask={ask} />
+  const elsewhere = [...new Set(listening.all.flatMap((b) => (b.status.url ? [b.status.url] : [])))]
   return (
-    <p class="note not-listening">
-      Claude is not listening for this page. Start <code>/redline</code> in Claude Code to review it.
-    </p>
+    <>
+      <p class="note not-listening">
+        {bound ? (
+          <>
+            {agent} ({bound}) is at work on the last round: the next screenshot can be taken once it listens again.
+          </>
+        ) : elsewhere.length ? (
+          <>
+            Your agent is listening for {elsewhere.join(', ')}, not this page. Ask it to review this one (<code>/redline</code>).
+          </>
+        ) : (
+          <>
+            No agent is listening for this page. Ask yours to review it (<code>/redline</code>).
+          </>
+        )}
+      </p>
+      {/* paired, but a redline refuses the token: another user's, an older one, or the token was made anew */}
+      {listening.unpaired && !listening.all.length && <PairBox ask={ask} again />}
+    </>
   )
 }
 
-function Start({ tab, session, ask, listening }: { tab: ActiveTab; session: Session | undefined; ask: Ask; listening: boolean }) {
+// A `redline wait` answered, but the browser does not know the user's token: from the native host
+// once `redline install` ran, or pasted here.
+function PairBox({ ask, again }: { ask: Ask; again?: boolean }) {
+  const [token, setToken] = useState('')
+  return (
+    <div class="note pair">
+      {again ? (
+        <p>
+          A <code>redline wait</code> listens that does not know this browser's token: another user's, or one of yours older than the token. If it is yours,
+          paste what <code>redline token</code> prints:
+        </p>
+      ) : (
+        <p>
+          A <code>redline wait</code> listens, but this browser is not paired with you. Run <code>redline install</code> once and restart the browser, or paste
+          what <code>redline token</code> prints:
+        </p>
+      )}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void ask({ type: 'pair/set', token }).then(() => setToken(''))
+        }}>
+        <input type="password" autocomplete="off" placeholder="Your token" value={token} onInput={(e) => setToken(e.currentTarget.value)} />
+        <button class="primary" type="submit" disabled={!token.trim()}>
+          Pair
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function Start({ tab, session, ask, listening: found }: { tab: ActiveTab; session: Session | undefined; ask: Ask; listening: Listening }) {
+  const listening = Boolean(found.bridge)
   return (
     <div class="start">
       <p class="page" title={tab.url}>
@@ -180,7 +285,7 @@ function Start({ tab, session, ask, listening }: { tab: ActiveTab; session: Sess
           </button>
         </div>
       ) : (
-        <NotListening />
+        <NotListening session={session} listening={found} ask={ask} />
       )}
       {session?.lastSent?.status === 'done' && <p class="note">Finished: the last round went to {shortPath(session.lastSent.directory)}.</p>}
       {listening && <Help listening />}
@@ -188,7 +293,9 @@ function Start({ tab, session, ask, listening }: { tab: ActiveTab; session: Sess
   )
 }
 
-function SessionView({ tab, session, ask, listening }: { tab: ActiveTab; session: Session; ask: Ask; listening: boolean }) {
+function SessionView({ tab, session, ask, listening: found }: { tab: ActiveTab; session: Session; ask: Ask; listening: Listening }) {
+  const listening = Boolean(found.bridge)
+  const agent = agentOf(found, session)
   const tabId = tab.id
   const locked = Boolean(session.pending)
   const marks = session.snapshots.reduce((n, s) => n + s.annotations.length, 0)
@@ -217,7 +324,7 @@ function SessionView({ tab, session, ask, listening }: { tab: ActiveTab; session
         </p>
       ) : !listening ? (
         <div class="capture">
-          <NotListening />
+          <NotListening session={session} listening={found} ask={ask} />
         </div>
       ) : (
         <div class="capture capture-row">
@@ -232,7 +339,6 @@ function SessionView({ tab, session, ask, listening }: { tab: ActiveTab; session
         </div>
       )}
 
-      {session.reply && <ReplyView tabId={tabId} session={session} reply={session.reply} ask={ask} disabled={locked} />}
       {session.snapshots.length === 0 && !session.reply && <Help listening={listening} />}
       {session.snapshots.map((snapshot) => (
         <SnapshotView key={snapshot.id} tabId={tabId} session={session} snapshot={snapshot} ask={ask} disabled={locked} />
@@ -245,15 +351,18 @@ function SessionView({ tab, session, ask, listening }: { tab: ActiveTab; session
           disabled={locked}
           onSave={(comment) => ask({ type: 'comment/set', tabId, comment })}
         />
-        <Outbox session={session} ask={ask} />
+        <Outbox session={session} agent={agent} ask={ask} />
+        {/* by the button that sends the round: its answers go with it, and its last word is read before */}
+        {session.reply && <ReplyView tabId={tabId} session={session} reply={session.reply} agent={agent} ask={ask} disabled={locked} />}
         <div class="actions">
           <button class="primary" disabled={locked || !canSend} title="Ctrl+D" onClick={() => ask({ type: 'round/submit', tabId, status: 'feedback' })}>
-            Send to Claude{marks ? ` (${marks} mark${marks === 1 ? '' : 's'})` : ''}
+            Send to {agent}
+            {marks ? ` (${marks} mark${marks === 1 ? '' : 's'})` : ''}
           </button>
           <button
             disabled={locked}
             onClick={() => ask({ type: 'round/submit', tabId, status: 'done' })}
-            title="Send this round, if any, and tell Claude you are finished">
+            title={`Send this round, if any, and tell ${agent} you are finished`}>
             Done
           </button>
         </div>
@@ -262,12 +371,28 @@ function SessionView({ tab, session, ask, listening }: { tab: ActiveTab; session
   )
 }
 
-// What Claude did of the last round's marks, and what it asks: an answer to each question goes
+// What the agent did of the last round's marks, and what it asks: an answer to each question goes
 // with the next round.
-function ReplyView({ tabId, session, reply, ask, disabled }: { tabId: number; session: Session; reply: Reply; ask: Ask; disabled: boolean }) {
+function ReplyView({
+  tabId,
+  session,
+  reply,
+  agent,
+  ask,
+  disabled,
+}: {
+  tabId: number
+  session: Session
+  reply: Reply
+  agent: string
+  ask: Ask
+  disabled: boolean
+}) {
   return (
     <section class="reply">
-      <h2>Claude, on round {reply.round}</h2>
+      <h2>
+        {capitalized(agent)}, on round {reply.round}
+      </h2>
       {reply.summary && <p class="summary">{reply.summary}</p>}
       {reply.marks?.length ? (
         <ul class="reply-marks">
@@ -296,7 +421,7 @@ function ReplyView({ tabId, session, reply, ask, disabled }: { tabId: number; se
   )
 }
 
-function Outbox({ session, ask }: { session: Session; ask: Ask }) {
+function Outbox({ session, agent, ask }: { session: Session; agent: string; ask: Ask }) {
   if (session.pending?.error)
     return (
       <p class="error">
@@ -309,8 +434,7 @@ function Outbox({ session, ask }: { session: Session; ask: Ask }) {
   if (session.pending)
     return (
       <p class="note waiting">
-        Round {session.round} is ready{session.pending.status === 'done' ? ', the last one' : ''}: it goes to Claude as soon as <code>/redline</code> waits for
-        it.
+        Round {session.round} is ready{session.pending.status === 'done' ? ', the last one' : ''}: it goes to {agent} as soon as it waits for it.
       </p>
     )
   if (session.lastSent)

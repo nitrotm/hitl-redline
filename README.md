@@ -1,18 +1,19 @@
-# Redline
+# hitl-redline
 
-Draw on the page you are building, comment each mark, and send the screenshots to Claude Code.
+Draw on the page you are building, comment each mark, and send the screenshots to your coding
+agent: Claude Code, Codex, pi, or another ([docs/agents.md](docs/agents.md)).
 
 ```
-/redline ──▶ Claude opens the preview in Firefox, and waits
+/redline ──▶ your agent opens the preview in the browser, and waits
                 │
                 ▼
    you take a screenshot: the page freezes under it
    you draw on it:  ▭ rectangles  ➚ arrows  ✎ freehand marks   each one numbered #1, #2…
    you write a comment per mark, as you draw it
    … as many screenshots as you need
-                │  Send to Claude
+                │  Send
                 ▼
-   Claude reads .redline/rounds/NNN/, changes the code, reloads the page, and waits again
+   the agent reads .redline/rounds/NNN/, changes the code, reloads the page, and waits again
                 │
                 └──▶ … until you click Done
 ```
@@ -22,10 +23,11 @@ It has three parts:
 - **The extension** (`packages/extension`), for Firefox, and for Chrome too. It draws on the page,
   lists the marks in the sidebar, captures snapshots, and sends each round.
 - **The bridge** (`packages/bridge`), `redline`: `redline wait` listens on the loopback, on the first
-  free port of 47390-47399 (one per project waiting), for one round, writes it to `.redline/rounds/NNN/` in the project, prints the path of its
-  `feedback.md`, and exits. Claude runs it in the background, so it is woken up when you send.
-- **The `redline` skill** (`claude/`), a Claude Code plugin that runs the loop, as `/redline`: a continuous session, round after round, until you send one with nothing to change. Claude
-  starts it on `/redline`, or by itself when you ask to review the page in the browser.
+  free port of 47390-47399 (one per agent session waiting), for one round, writes it to `.redline/rounds/NNN/` in the project, prints the path of its
+  `feedback.md`, and exits: that exit is what tells the agent a round came.
+- **The `redline` skill** (`claude/skills/redline`), an [Agent Skill](https://agentskills.io) that runs the loop: a continuous session, round after round,
+  until you send one with nothing to change. The agent starts it on `/redline`, or by itself when you ask to review the page in the browser. It comes as a
+  Claude Code plugin, as a skill for Codex, and in a pi package (`packages/pi`) with a tool that wakes pi when a round comes.
 
 ## Install
 
@@ -38,23 +40,108 @@ nix build .#redline-extension  # firefox/, chrome/, redline.xpi
 
 Or add `packages.<system>.redline` of this flake to your home-manager packages.
 
-The `redline` skill is a Claude Code plugin; this repository is its marketplace:
+Without Nix (macOS, Windows, any Linux), with Node 22.18 or later:
 
+```sh
+yarn install && yarn build
+node packages/bridge/dist/redline.mjs --help
 ```
-/plugin marketplace add /path/to/firefox-redline
-/plugin install redline@redline
+
+and put that `node …/redline.mjs` on your `PATH` as `redline`: an alias or a small script, or a
+`redline.cmd` on Windows (`@node C:\path\to\hitl-redline\packages\bridge\dist\redline.mjs %*`).
+`redline extension-path` finds the extension's build next to it, or `REDLINE_EXTENSION` names
+another.
+
+Then pair your browsers with you, once:
+
+```sh
+redline install
 ```
 
-With Claude Code's sandbox on, `redline wait` must run outside it: the sandbox has its own
-loopback, which Firefox does not reach. The skill says so; to spare the permission prompt each
-round, add `redline` to the sandbox's `excludedCommands` in your Claude Code settings.
+It makes your token (see [Security](#security)) and installs the native messaging host that hands
+it to the extension, for Firefox, and for Chrome and Chromium if they are there. With home-manager,
+`programs.firefox.nativeMessagingHosts = [ redline ]` installs the host instead (the package has
+its manifest). Where the browser cannot run a native host (Firefox as a Snap or a Flatpak without
+the WebExtensions portal), the sidebar asks for the token: paste what `redline token` prints.
 
-Firefox comes from the **firefox-devtools** MCP server: `/redline` installs the extension in
-its profile as a temporary add-on, each time.
+Then the skill, for your agent:
+
+- **Claude Code**: the skill is a plugin; this repository is its marketplace.
+
+  ```
+  /plugin marketplace add /path/to/hitl-redline
+  /plugin install redline@redline
+  ```
+
+- **Codex**: it reads the skill from `.agents/skills` in this repository already; for your other
+  projects, `redline install --skills` links it into `~/.agents/skills`.
+- **pi**: `pi install /path/to/hitl-redline/packages/pi`: the skill, and the `redline_wait` tool.
+- **Another agent**: [docs/agents.md](docs/agents.md) has what it needs.
+
+### The browser
+
+- **With the firefox-devtools MCP** (Claude Code, Codex): the agent installs the extension in the
+  MCP's Firefox as a temporary add-on, at each review, and opens and reloads the pages itself.
+- **With the Chrome DevTools MCP** (Claude Code, Codex; [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp)):
+  the same in Chrome. Its extension tools are off by default, and it reads files only under its
+  roots: give it both, the root being the directory of `redline extension-path chrome`.
+
+  ```sh
+  claude mcp add chrome-devtools -- npx chrome-devtools-mcp@1.11.0 --categoryExtensions \
+    --filesystemRoot="$(dirname "$(redline extension-path chrome)")"
+  ```
+
+  (in Codex, the same command and arguments under `[mcp_servers.chrome-devtools]` in
+  `~/.codex/config.toml`). Its Chrome has a profile of its own
+  (`~/.cache/chrome-devtools-mcp/chrome-profile`), where Chrome looks for the native host on Linux
+  and macOS: run `redline install` once that Chrome has run, and it pairs it too
+  (`--chrome-profile DIR` for one started with `--userDataDir`; with `--isolated`, a new profile
+  each time, paste the token in the sidebar instead). Pin Redline's button from Chrome's puzzle
+  menu: it opens the side panel.
+
+- **Without it** (pi, or any agent without a browser MCP), install the extension in your own
+  browser, once, then run `redline install` if not done yet:
+  - **Firefox**: a release Firefox installs signed add-ons only. Sign `redline.xpi` (of
+    `nix build .#redline-extension`, or `packages/extension/.output/firefox-mv2` zipped) for
+    yourself with `web-ext sign --channel unlisted` and an [AMO](https://addons.mozilla.org)
+    account, then open the signed file in Firefox. Firefox Developer Edition and Nightly also
+    take it unsigned, with `xpinstall.signatures.required` set to `false` in `about:config`.
+  - **Chrome, Chromium**: `chrome://extensions`, **Developer mode**, **Load unpacked**, and the
+    `chrome/` directory (`packages/extension/.output/chrome-mv3`).
+
+  The agent opens pages there with `redline open URL`, and has them reloaded after its changes
+  with `redline wait --reload`.
+
+### With an agent's sandbox
+
+`redline wait` and `redline status` talk to the browser over the machine's loopback, and an
+agent's sandbox stands in the way.
+
+**Codex**: a sandboxed command may not listen on the loopback (`allow_local_binding` is off). The
+skill has Codex run `redline` with escalated permissions; approving `redline` once spares the
+question afterwards.
+
+**Claude Code**:
+
+- **Linux and WSL2**: a sandboxed command has a `localhost` of its own, which the browser does not
+  reach. They must run outside the sandbox.
+- **macOS**: the sandbox forbids listening on a port unless `sandbox.network.allowLocalBinding` is
+  on, which lets every sandboxed command reach every service of your `localhost`, not only this one.
+  Running `redline` outside the sandbox is the narrower choice there too.
+- **Windows** (native): Claude Code has no sandbox there.
+
+The skill runs them outside the sandbox. To spare the permission prompt each round, list them in
+your Claude Code settings. The entries are matched like `Bash(…)` rules, so a bare `redline` would
+match only `redline` with no arguments, and a call that chains another command stays sandboxed:
+
+```json
+{ "sandbox": { "excludedCommands": ["redline wait *", "redline status", "redline install"] } }
+```
 
 ## Use
 
-In a project, run `/redline` (or `/redline http://localhost:5173/`). Claude opens the preview,
+In a project, run `/redline` (or `/redline http://localhost:5173/`), or ask your agent to show
+you the page. It opens the preview,
 and Redline starts on it. Open the sidebar with the Redline button of the browser's toolbar: the
 live page itself shows nothing of Redline.
 
@@ -72,7 +159,7 @@ saves. Double-click a mark or its number, whatever the tool, to edit its comment
 | <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> | Colors (and the selected mark's)                                           |
 | <kbd>Del</kbd>                                      | Delete the selected mark                                                   |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd>                        | Undo the last mark                                                         |
-| <kbd>Ctrl</kbd>+<kbd>D</kbd>                        | Send to Claude; Done when there is nothing to send                         |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd>                        | Send to your agent; Done when there is nothing to send                     |
 | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>        | Turn Redline on or off on the tab                                          |
 
 The tools and colors go by their places on the keyboard, not their letters: the colors are the
@@ -100,19 +187,19 @@ screenshots of the round, and the marks of each with their comment:
 - The marks of the screenshot being annotated have a trash icon, to delete them.
 - A click on a screenshot's preview shows it on the page, to mark more; another click goes back to
   the live page.
-- Write a comment on the round as a whole, then **Send to Claude**, or **Done** to end the loop.
+- Write a comment on the round as a whole, then **Send**, or **Done** to end the loop.
 
-Claude replies in the sidebar: what it did of each mark, and its questions, each with a field to
+The agent replies in the sidebar: what it did of each mark, and its questions, each with a field to
 answer it. The answers go with the next round, which may hold only them.
 
-A round waits in the browser until Claude listens. The bar at the bottom of the sidebar tells
-whether it does.
+A round waits in the browser until the agent listens. The bar at the bottom of the sidebar tells
+whether it does, and which agent: its name, its channel's, and its project.
 
 Each round lands in the project:
 
 ```
 .redline/rounds/003/
-├─ feedback.md          what Claude reads first: every mark by #id, its comment, its element
+├─ feedback.md          what the agent reads first: every mark by #id, its comment, its element
 ├─ feedback.json        all of it, with coordinates
 ├─ S1.annotated.png     the screenshot with the marks and their #id
 └─ S1.clean.png         the same, without
@@ -123,11 +210,79 @@ Add `.redline/` to the project's `.gitignore` (`/redline` does).
 Each `#id` badge goes where it hides the least: of the places around its mark, the one with the
 least to see on the screenshot, and no other mark.
 
-Each mark tells Claude where its element is: a CSS selector, its text, and its path in the page
+Each mark tells the agent where its element is: a CSS selector, its text, and its path in the page
 (`main#app > section.hero > button.cta[1/2]`). On a Preact page in development, it also names the
-components that rendered it and where its JSX is, so Claude goes straight to the source.
+components that rendered it and where its JSX is, so the agent goes straight to the source.
 
 Mark ids are never reused in a session: `#7` is the same mark in every snapshot and every round.
+
+### Several agent sessions at once
+
+Each agent session, of whichever agent, reviews with you on a channel of its own, named like `sleepy-gecko`: in
+different projects, in worktrees of one, or even in the same directory on the same dev server.
+`redline wait` prints its channel's name, and the sidebar's bar shows it.
+
+- A tab is bound to the channel of the agent that opened it (the one whose `redline wait` names
+  the page's app, and that no other tab has yet). Its rounds go to that agent alone: while it is
+  at work on the last round, the next one waits in the browser, never going to another agent.
+- With several agents for the page's app, the bar has a menu to send the tab's rounds to another.
+- A channel keeps its name from round to round (`redline wait --session`, which the skill gives
+  Claude Code's session id; other agents' are found by their process), and a new wait of a channel stops its last one.
+- Ten at once: the ten ports of 47390-47399.
+
+## Security
+
+Redline is meant to expose nothing of your machine. What it does, and what it relies on:
+
+- **What listens**: a `redline wait` only, while an agent waits for a round, on 127.0.0.1 (never
+  another interface) and a port of 47390-47399. It takes one round and exits.
+- **Web pages cannot reach it**: it refuses a request that names another host than `127.0.0.1` or
+  `localhost` (DNS rebinding), or that carries a web page's `Origin`, and it sends no CORS headers.
+- **Other users and processes of the machine cannot either.** The loopback is everyone's on the
+  machine, so the bridge and the extension prove to each other that they know your **token**: 32
+  random bytes in a file only you can read (`~/.config/redline/token` on Linux, or under `$XDG_CONFIG_HOME`;
+  `~/Library/Application Support/redline/token` on macOS, `%APPDATA%\redline\token` on Windows;
+  `REDLINE_HOME` moves the directory). Each request carries an HMAC of it, bound to the bridge's
+  port and to a random value of each run, and the token itself never goes over the wire. A process
+  of another user can neither post a round to your agent nor read its status, and one that
+  listens on a port of the range first gets nothing from your browser: no screenshot, no round.
+  The browser gets the token from the native messaging host, which it runs as you
+  (`redline install`), or from you, pasted in the sidebar.
+- **What it writes**: `.redline/` in the project, readable by you only (0700 and 0600). The
+  screenshots show what the page showed: keep `.redline/` out of git (`/redline` adds it to
+  `.gitignore`).
+- **The extension** has the permission of every site (`<all_urls>`), to capture whatever page you
+  start it on. It runs on a page only when you start it there, or when a `redline wait` names the
+  page's app. Install it in the browser the firefox-devtools MCP drives, a profile of its own, not
+  the one of your everyday browsing: the agent drives that browser. Without an MCP, it is your
+  own browser, where the extension does nothing until you start it, or a page of an app an agent
+  waits for opens.
+- **The app under review is trusted**: its pages run in the browser, and their text, selectors and
+  components go to the agent. `feedback.md` writes them as data, on one line each, which a page cannot
+  turn into instructions of its own. The overlay ignores the events that the page's scripts make
+  up (a page could otherwise send a round with a synthetic Ctrl+D).
+- **What remains**: root, and anyone who can read your files, can read the token. A process can
+  still hold all ten ports, so that no `redline wait` can listen: a nuisance, not a leak.
+
+## Platforms and networks
+
+- **macOS, Linux, Windows**: the same, but for the paths above and the sandbox (see
+  [With an agent's sandbox](#with-an-agents-sandbox)). `redline install` writes the native
+  host's manifest where each browser looks for it (in the registry, on Windows).
+- **WSL2**: with the agent, and the firefox-devtools MCP's Firefox (WSLg), in the same
+  distribution, everything is on its loopback, as on Linux.
+- **A firewall** that asks whether to let `node` accept connections: deny it. Redline needs none
+  from the network.
+- **A proxy**: browsers do not send `127.0.0.1` through one. Keep it so: Firefox's
+  `network.proxy.allow_hijacking_localhost` would send the rounds through the proxy.
+- **A VPN** does not change the loopback.
+- **A port of 47390-47399 taken** by other software: each `redline wait` takes the next free one.
+  The range is `PORTS`, in `packages/shared/src/protocol.ts`.
+- **The agent on another host, or in a container**, with the browser here: forward the ports
+  to this machine's loopback (`ssh -L 47390:127.0.0.1:47390 …` for each, or VS Code's port
+  forwarding), and give both sides the same token (copy it, or point `REDLINE_HOME` at a mounted
+  copy). Never make the bridge listen on another interface, nor publish its ports with
+  `docker -p`: that is the network.
 
 ## Develop
 
@@ -146,8 +301,8 @@ nix flake check     # the build of the flake, with the type check and the tests
 In the dev shell, `redline` runs the bridge from its sources, and `redline extension-path`
 points at `packages/extension/.output/firefox-mv2`.
 
-To try it by hand: `node e2e-fixtures/serve.mjs` serves a test page on `http://127.0.0.1:47391/`,
-and `redline wait --url http://127.0.0.1:47391/` makes Redline start there by itself.
+To try it by hand: `node e2e-fixtures/serve.mjs` serves a test page on `http://127.0.0.1:47380/`,
+and `redline wait --url http://127.0.0.1:47380/` makes Redline start there by itself.
 
 See [AGENTS.md](AGENTS.md) for how the code is laid out.
 

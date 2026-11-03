@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 
-import { type Status, isUnder } from '@redline/shared'
+import { type Bridge, bridgeForSession, candidates, isUnder } from '@redline/shared'
 
-import { bridgeFor } from '@/src/bridge-client.ts'
+import { findBridges, heldChannels } from '@/src/bridge-client.ts'
 import { send } from '@/src/messages.ts'
 import { getImage } from '@/src/state/images.ts'
-import type { Session } from '@/src/state/session.ts'
+import { type Session, needsReload } from '@/src/state/session.ts'
 import { getSession, watchSession } from '@/src/state/store.ts'
 
 export interface ActiveTab {
@@ -67,17 +67,36 @@ export function useSession(tabId: number | undefined): Session | undefined {
 
 const POLL_MS = 2000
 
-// The `redline wait` of the page the tab shows, asked every two seconds; when there is one, a
-// submitted round goes at once.
-export function useBridge(tabUrl: string | undefined, sessionId: string | undefined, pending: boolean): Status | undefined {
-  const [status, setStatus] = useState<Status>()
+export interface Listening {
+  // the bridge of the tab's session: its channel's, or the likeliest for an unbound one
+  bridge?: Bridge
+  // those of the page's app, to bind the tab to another
+  candidates: Bridge[]
+  // every bridge of the user's, whatever page it is for
+  all: Bridge[]
+  // a redline listens that does not know the token: the extension is not paired, or another user's
+  unpaired: boolean
+  paired: boolean
+}
+
+const NOTHING: Listening = { candidates: [], all: [], unpaired: false, paired: true }
+
+// The `redline wait`s, asked every two seconds; when the session's listens, a submitted round goes
+// at once.
+export function useListening(tab: ActiveTab | undefined, session: Session | undefined): Listening {
+  const [listening, setListening] = useState<Listening>(NOTHING)
+  const pending = Boolean(session?.pending)
   useEffect(() => {
     let stopped = false
     const poll = async () => {
-      const next = (await bridgeFor(tabUrl, sessionId))?.status
+      const found = await findBridges()
+      const unbound = !session || session.lastSent?.status === 'done'
+      const bridge = bridgeForSession(found.bridges, tab?.url, unbound ? undefined : session.channel, await heldChannels(tab?.id))
       if (stopped) return
-      setStatus(next)
-      if (next && pending) await send({ type: 'outbox/flush' }).catch(() => undefined)
+      setListening({ bridge, candidates: candidates(found.bridges, tab?.url), all: found.bridges, unpaired: found.unpaired.length > 0, paired: found.paired })
+      // a round to send, or a page its agent changed, to reload
+      const reload = bridge && session && session.channel === bridge.status.channel && needsReload(session, bridge.status.nonce, bridge.status.reload)
+      if (bridge && (pending || reload)) await send({ type: 'outbox/flush' }).catch(() => undefined)
     }
     void poll()
     const timer = setInterval(poll, POLL_MS)
@@ -85,8 +104,8 @@ export function useBridge(tabUrl: string | undefined, sessionId: string | undefi
       stopped = true
       clearInterval(timer)
     }
-  }, [tabUrl, sessionId, pending])
-  return status
+  }, [tab?.id, tab?.url, session?.channel, session?.lastSent?.status, session?.reloadedFor, pending])
+  return listening
 }
 
 // the screenshot of a snapshot, as a data URL

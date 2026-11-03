@@ -93,8 +93,9 @@ work (no wait), they wait in the browser. A channel keeps its name from wait to 
 3. else the project directory.
 
 The user sees the channel's name in the sidebar, in Firefox's window title, and, in
-[Herdr](https://herdr.dev), as the name of the agent: a wait whose `HERDR_PANE_ID` is set names the
-agent of that pane after its channel (`herdr agent rename`), unless the user named it otherwise.
+[Herdr](https://herdr.dev), in the name of the agent: a wait whose `HERDR_PANE_ID` is set names the
+agent of that pane after its kind and its channel (`herdr agent rename`, `claude-sleepy-gecko`),
+unless the user named it otherwise.
 
 A new wait of a channel stops its last one (which exits with 3), so an agent never needs to kill
 one. Ten waits at once at most: the ten ports.

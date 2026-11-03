@@ -14,8 +14,9 @@
     "test:e2e:chrome": "yarn workspace @redline/extension test:e2e:chrome",
     "test:e2e:firefox": "yarn workspace @redline/extension test:e2e:firefox",
     "shots": "yarn workspace @redline/extension shots",
-    "lint": "prettier --check packages claude docs e2e-fixtures nix .claude-plugin '*.md' package.json .prettierrc.yml",
-    "format": "prettier --write packages claude docs e2e-fixtures nix .claude-plugin '*.md' package.json .prettierrc.yml"
+    "bump": "node scripts/version.mjs",
+    "lint": "prettier --check packages claude docs e2e-fixtures nix scripts .github .claude-plugin '*.md' package.json .prettierrc.yml",
+    "format": "prettier --write packages claude docs e2e-fixtures nix scripts .github .claude-plugin '*.md' package.json .prettierrc.yml"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",

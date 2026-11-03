@@ -29,6 +29,8 @@ In the flake of your NixOS or home-manager configuration, add it to the inputs:
 }
 ```
 
+(or a release's tag, which never moves: `github:nitrotm/hitl-redline/v1.0.0`)
+
 then use its package, `inputs.redline.packages.${pkgs.stdenv.hostPlatform.system}.redline`,
 here `redline`:
 
@@ -41,6 +43,22 @@ programs.firefox.nativeMessagingHosts = [ redline ];
 environment.systemPackages = [ redline ];
 programs.firefox.nativeMessagingHosts.packages = [ redline ];
 ```
+
+With home-manager's Claude Code (`programs.claude-code`), the skill comes from the same input, so
+it always matches its `redline`, and needs no `/plugin marketplace add`:
+
+```nix
+programs.claude-code = {
+  enable = true;
+  # the plugin is the input's claude/ directory: home-manager gives it to claude with --plugin-dir
+  plugins = [ "${inputs.redline}/claude" ];
+};
+home.packages = [ redline ]; # the skill runs `redline` from PATH
+programs.firefox.nativeMessagingHosts = [ redline ];
+```
+
+A browser MCP for the agent (see [The browser](#the-browser)) goes in the same place, in
+`programs.claude-code.mcpServers`.
 
 With the native host from the package, Firefox needs no `redline install`: the host makes your
 token the first time the extension asks for it. Chrome and Chromium still need `redline install`
@@ -55,7 +73,9 @@ Node with the rest of your system, but is not what the tests ran on.
 
 ### Without Nix
 
-On macOS, Windows or any Linux, with Node 22.18 or later:
+On macOS, Windows or any Linux, with Node 22.18 or later. A [release](https://github.com/nitrotm/hitl-redline/releases)
+has it built: `hitl-redline-X.Y.Z.tar.gz` unpacks to a `hitl-redline-X.Y.Z` that you use as the
+clone below, without the build. Or build it:
 
 ```sh
 git clone https://github.com/nitrotm/hitl-redline && cd hitl-redline
@@ -85,7 +105,8 @@ the WebExtensions portal), the sidebar asks for the token: paste what `redline t
 
 Then the skill, for your agent:
 
-- **Claude Code**: the skill is a plugin; this repository is its marketplace.
+- **Claude Code**: the skill is a plugin; this repository is its marketplace (with home-manager,
+  see [With Nix](#with-nix) instead).
 
   ```
   /plugin marketplace add nitrotm/hitl-redline

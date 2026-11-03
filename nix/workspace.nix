@@ -33,7 +33,8 @@ let
 in
 pkgs.stdenv.mkDerivation (finalAttrs: {
   pname = "redline-workspace";
-  version = "1.0.0";
+  # the release's, which scripts/version.mjs keeps the same in every package
+  version = (lib.importJSON ../packages/bridge/package.json).version;
   inherit src;
 
   # yarn.lock's packages that carry no checksum of their own (yarn-berry-fetcher

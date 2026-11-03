@@ -1,0 +1,120 @@
+# Every pull request and every push to main is checked: the flake (typecheck, unit tests, build),
+# then lint and the end-to-end tests in both browsers. A push to main whose version has no tag yet
+# is a release: it tags the commit vX.Y.Z and publishes the files that build made.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A pull request's newer push replaces its older run; main's runs all finish, so that none of its
+# releases is cut short.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  nix:
+    name: Nix (typecheck, unit tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check that every file has the same version
+        run: node scripts/version.mjs
+      - run: nix flake check -L
+      - run: nix build -L .#redline .#redline-extension
+      # The workspace is the flake check's build: here it only links it.
+      - name: Package the release's files
+        run: |
+          nix build -L .#checks.x86_64-linux.workspace -o workspace
+          version=$(node scripts/version.mjs)
+          # A checkout's layout, built: `redline extension-path` and `redline install --skills`
+          # find the extension and the skill next to the bridge, as in a clone.
+          tree="release/hitl-redline-$version"
+          mkdir -p dist "$tree/packages/bridge/dist" "$tree/packages/extension/.output" "$tree/claude/skills"
+          cp workspace/bridge/redline.mjs "$tree/packages/bridge/dist/"
+          cp -r workspace/firefox "$tree/packages/extension/.output/firefox-mv2"
+          cp -r workspace/chrome "$tree/packages/extension/.output/chrome-mv3"
+          cp -r workspace/skills/redline "$tree/claude/skills/"
+          cp LICENSE README.md "$tree/"
+          chmod -R u+w release
+          tar -czf "dist/hitl-redline-$version.tar.gz" -C release "hitl-redline-$version"
+          cp workspace/redline.xpi "dist/redline-$version.xpi"
+          (cd "$tree/packages/extension/.output/chrome-mv3" && zip -qr "$GITHUB_WORKSPACE/dist/redline-chrome-$version.zip" .)
+          (cd dist && sha256sum -- * > SHA256SUMS)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: dist/
+          retention-days: 7
+
+  browsers:
+    name: Lint and end-to-end tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      # Ubuntu forbids unprivileged user namespaces to programs AppArmor does not know, which the
+      # dev shell's Chromium and Firefox are: without them, their sandboxes fail to start.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-
+      - run: nix develop -c yarn install --immutable
+      - run: nix develop -c yarn lint
+      - run: nix develop -c yarn build
+      - run: nix develop -c yarn test:e2e:chrome
+      - run: nix develop -c yarn test:e2e:firefox
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-report
+          path: |
+            packages/extension/playwright-report/
+            packages/extension/test-results/
+          retention-days: 7
+
+  release:
+    name: Release
+    needs: [nix, browsers]
+    # This repository's main only: not a fork's, nor a mirror's that runs these workflows too.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'nitrotm/hitl-redline'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Find the version, and whether it is released already
+        id: version
+        run: |
+          version=$(node scripts/version.mjs)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "::notice::v$version is released already: bump the version to release this commit"
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.version.outputs.new == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist/
+      # gh makes the release a draft, uploads its files, then publishes it, which creates the tag on
+      # this commit: with the repository's immutable releases, neither can change after.
+      - if: steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
